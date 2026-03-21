@@ -1,15 +1,27 @@
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { ExternalLink, Trash2 } from "lucide-react";
 import { formatTimestamp, formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
+import { cn } from "@/lib/utils";
 import type { DocTableRowProps } from "./types";
 
-export const DocTableRow = ({ doc, onClick, onDelete, isDeleting }: DocTableRowProps) => (
+export const DocTableRow = ({
+  doc,
+  isSelected,
+  onToggleSelect,
+  onClick,
+  onDelete,
+  isDeleting,
+}: DocTableRowProps) => (
   <TableRow
-    className="group cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+    className={cn(
+      "group cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+      isSelected && "bg-indigo-50/50 dark:bg-indigo-950/20"
+    )}
     onClick={onClick}
     role="button"
     tabIndex={0}
@@ -20,6 +32,14 @@ export const DocTableRow = ({ doc, onClick, onDelete, isDeleting }: DocTableRowP
       }
     }}
   >
+    <TableCell className="w-10 pr-0">
+      <Checkbox
+        checked={isSelected}
+        onCheckedChange={() => onToggleSelect(doc.id)}
+        onClick={(event) => event.stopPropagation()}
+        aria-label={`Select ${truncateText(doc.title, 30)}`}
+      />
+    </TableCell>
     <TableCell className="max-w-[300px]">
       <div className="flex items-center gap-2">
         <span
@@ -55,27 +75,27 @@ export const DocTableRow = ({ doc, onClick, onDelete, isDeleting }: DocTableRowP
       <span title={truncateText(doc.content, 100)}>{truncateText(doc.content, 50)}</span>
     </TableCell>
     <TableCell className="text-sm text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-      <div className="flex items-center gap-2">
-        {formatTimestamp(doc.createdAt)}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
-              disabled={isDeleting}
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete(doc.id);
-              }}
-              aria-label="Delete document"
-            >
-              <Trash2 className="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete document</TooltipContent>
-        </Tooltip>
-      </div>
+      {formatTimestamp(doc.createdAt)}
+    </TableCell>
+    <TableCell className="w-10 pl-0">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+            disabled={isDeleting}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(doc.id);
+            }}
+            aria-label="Delete document"
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Delete document</TooltipContent>
+      </Tooltip>
     </TableCell>
   </TableRow>
 );

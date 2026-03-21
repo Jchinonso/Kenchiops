@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BookOpen, RefreshCw, FileText, Plus } from "lucide-react";
 import { formatSnakeCase, truncateText } from "@/lib/formatters";
 import { isSafeUrl } from "@/lib/urlSafety";
@@ -35,18 +36,7 @@ import {
   type KnowledgeDocDTO,
 } from "@/hooks/useKnowledgeBase";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { PaginationControls } from "@/components/PaginationControls";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -56,9 +46,9 @@ import { StatsHeader } from "./StatsHeader";
 import { DocTableRow } from "./DocTableRow";
 import { DocDetailDrawer } from "./DocDetailDrawer";
 import { AddDocumentDialog } from "./AddDocumentDialog";
+import { BulkActionBar } from "./BulkActionBar";
+import { DeleteConfirmDialog, BulkDeleteConfirmDialog, PurgeConfirmDialog } from "./ConfirmDialogs";
 import { PAGINATION_CONFIG, ALL_TYPES_VALUE } from "./constants";
-
-// ==================== Main Component ====================
 
 export const KnowledgeBase = () => {
   const isMobile = useIsMobile();
@@ -71,6 +61,9 @@ export const KnowledgeBase = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const docTypeFilter = selectedDocType === ALL_TYPES_VALUE ? undefined : selectedDocType;
 
@@ -87,12 +80,15 @@ export const KnowledgeBase = () => {
   const items = docsData?.items ?? [];
   const total = docsData?.total ?? 0;
 
-  // Reset offset when filtered results are fewer than current position
   useEffect(() => {
     if (total > 0 && offset >= total) {
       setOffset(0);
     }
   }, [total, offset]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [offset, pageSize, selectedDocType]);
 
   usePageTitle("Knowledge Base | Kenchi");
 
@@ -101,16 +97,18 @@ export const KnowledgeBase = () => {
   const totalPages = Math.ceil(total / pageSize);
   const hasPrev = offset > 0;
   const hasNext = offset + pageSize < total;
+  const selectionCount = selectedIds.size;
+  const allOnPageSelected = hasItems && items.every((doc) => selectedIds.has(doc.id));
 
-  const documentsByType = stats?.documentsByType;
   const docTypeOptions = useMemo(() => {
+    const documentsByType = stats?.documentsByType;
     if (!documentsByType) {
       return [];
     }
     return [...Object.entries(documentsByType)]
       .sort(([, countA], [, countB]) => countB - countA)
       .map(([docType]) => docType);
-  }, [documentsByType]);
+  }, [stats?.documentsByType]);
 
   const handleDocTypeChange = (value: string) => {
     setSelectedDocType(value);
@@ -122,13 +120,8 @@ export const KnowledgeBase = () => {
     setOffset(0);
   };
 
-  const goNext = () => {
-    setOffset((prev) => prev + pageSize);
-  };
-
-  const goPrev = () => {
-    setOffset((prev) => Math.max(0, prev - pageSize));
-  };
+  const goNext = () => setOffset((prev) => prev + pageSize);
+  const goPrev = () => setOffset((prev) => Math.max(0, prev - pageSize));
 
   const handleDocClick = useCallback((doc: KnowledgeDocDTO) => {
     setSelectedDoc(doc);
@@ -154,10 +147,69 @@ export const KnowledgeBase = () => {
     if (success) {
       toast.success("Document deleted");
       setDeleteTargetId(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTargetId);
+        return next;
+      });
     } else {
       toast.error("Failed to delete document");
     }
   }, [deleteTargetId, deleteDocument]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds(allOnPageSelected ? new Set() : new Set(items.map((doc) => doc.id)));
+  }, [allOnPageSelected, items]);
+
+  const handleClearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      return;
+    }
+    setIsBulkDeleting(true);
+    const idsToDelete = [...selectedIds];
+    // let: accumulator for sequential async deletion results
+    let successCount = 0;
+    for (const id of idsToDelete) {
+      const success = await deleteDocument(id);
+      if (success) {
+        successCount += 1;
+      }
+    }
+    setIsBulkDeleting(false);
+    setBulkDeleteConfirmOpen(false);
+    setSelectedIds(new Set());
+    if (successCount === idsToDelete.length) {
+      toast.success(`Deleted ${successCount} document${successCount > 1 ? "s" : ""}`);
+    } else if (successCount > 0) {
+      toast.warning(`Deleted ${successCount} of ${idsToDelete.length} documents. Some failed.`);
+    } else {
+      toast.error("Failed to delete documents");
+    }
+  }, [selectedIds, deleteDocument]);
+
+  const handlePurgeAll = useCallback(async () => {
+    const success = await purgeAll();
+    if (success) {
+      toast.success("All documents purged");
+      setPurgeConfirmOpen(false);
+    } else {
+      toast.error("Failed to purge documents");
+    }
+  }, [purgeAll]);
 
   return (
     <div className="space-y-6">
@@ -170,7 +222,6 @@ export const KnowledgeBase = () => {
         </p>
       </div>
 
-      {/* Stats Header */}
       {statsLoading ? (
         <div className="flex flex-wrap items-center gap-3">
           <Skeleton className="h-8 w-40 rounded-lg" />
@@ -185,7 +236,6 @@ export const KnowledgeBase = () => {
         />
       ) : null}
 
-      {/* Filter + Add Button */}
       <div className="flex items-center gap-3">
         <Select
           value={selectedDocType}
@@ -204,12 +254,10 @@ export const KnowledgeBase = () => {
             ))}
           </SelectContent>
         </Select>
-
         <Button size="sm" onClick={() => setAddDialogOpen(true)}>
           <Plus className="w-4 h-4" />
           Add Document
         </Button>
-
         {total > 0 && (
           <Button
             size="sm"
@@ -222,7 +270,6 @@ export const KnowledgeBase = () => {
         )}
       </div>
 
-      {/* Documents Table */}
       <Card>
         <CardHeader className="border-b">
           <div className="flex items-center gap-2">
@@ -235,12 +282,23 @@ export const KnowledgeBase = () => {
               : "No documents found"}
           </CardDescription>
         </CardHeader>
+
+        {selectionCount > 0 && (
+          <BulkActionBar
+            selectionCount={selectionCount}
+            allOnPageSelected={allOnPageSelected}
+            isBulkDeleting={isBulkDeleting}
+            onDeleteSelected={() => setBulkDeleteConfirmOpen(true)}
+            onSelectAllOnPage={handleToggleSelectAll}
+            onClearSelection={handleClearSelection}
+          />
+        )}
+
         <CardContent className="p-0">
           {docsLoading ? (
-            <TableSkeleton columns={5} />
+            <TableSkeleton columns={7} />
           ) : docsError ? (
             <div className="p-8 text-center space-y-3">
-              {/* SECURITY (VULN-706): Truncate error to prevent verbose info disclosure */}
               <p className="text-sm text-red-600 dark:text-red-400">
                 {truncateText(docsError ?? "An error occurred", 200)}
               </p>
@@ -293,12 +351,7 @@ export const KnowledgeBase = () => {
                               "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700",
                           },
                         ]}
-                        fields={[
-                          {
-                            label: "Preview",
-                            value: truncateText(doc.content, 80),
-                          },
-                        ]}
+                        fields={[{ label: "Preview", value: truncateText(doc.content, 80) }]}
                         onClick={
                           safeUrl
                             ? () => window.open(safeUrl, "_blank", "noopener")
@@ -325,17 +378,24 @@ export const KnowledgeBase = () => {
             <>
               <div className="overflow-x-auto">
                 <Table>
-                  <TableCaption className="sr-only">
-                    Knowledge base documents table showing title, type, repository, preview, and
-                    created date
-                  </TableCaption>
+                  <TableCaption className="sr-only">Knowledge base documents table</TableCaption>
                   <TableHeader className="bg-zinc-50/80 dark:bg-zinc-800/50">
                     <TableRow>
+                      <TableHead scope="col" className="w-10 pr-0">
+                        <Checkbox
+                          checked={allOnPageSelected}
+                          onCheckedChange={handleToggleSelectAll}
+                          aria-label="Select all documents on page"
+                        />
+                      </TableHead>
                       <TableHead scope="col">Title</TableHead>
                       <TableHead scope="col">Type</TableHead>
                       <TableHead scope="col">Repository</TableHead>
                       <TableHead scope="col">Preview</TableHead>
                       <TableHead scope="col">Created</TableHead>
+                      <TableHead scope="col" className="w-10 pl-0">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <tbody>
@@ -343,6 +403,8 @@ export const KnowledgeBase = () => {
                       <DocTableRow
                         key={doc.id}
                         doc={doc}
+                        isSelected={selectedIds.has(doc.id)}
+                        onToggleSelect={handleToggleSelect}
                         onClick={() => handleDocClick(doc)}
                         onDelete={handleRowDelete}
                         isDeleting={isDeleting}
@@ -351,7 +413,6 @@ export const KnowledgeBase = () => {
                   </tbody>
                 </Table>
               </div>
-
               <PaginationControls
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -368,83 +429,36 @@ export const KnowledgeBase = () => {
         </CardContent>
       </Card>
 
-      {/* Document Detail Drawer */}
       <DocDetailDrawer doc={selectedDoc} open={drawerOpen} onOpenChange={handleDrawerOpenChange} />
-
-      {/* Add Document Dialog */}
       <AddDocumentDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
-
-      {/* Delete Confirmation Dialog (from table row) */}
-      <AlertDialog
+      <DeleteConfirmDialog
         open={deleteTargetId !== null}
         onOpenChange={(open) => {
           if (!open) {
             setDeleteTargetId(null);
           }
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this document? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeleting}
-              onClick={(event) => {
-                event.preventDefault();
-                void confirmRowDelete();
-              }}
-              className={cn(
-                !isDeleting
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
-              )}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Purge All Confirmation Dialog */}
-      <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Purge All Documents</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all {total} knowledge documents for your organization.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isPurging}
-              onClick={async (event) => {
-                event.preventDefault();
-                const success = await purgeAll();
-                if (success) {
-                  toast.success("All documents purged");
-                  setPurgeConfirmOpen(false);
-                } else {
-                  toast.error("Failed to purge documents");
-                }
-              }}
-              className={cn(
-                !isPurging
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
-              )}
-            >
-              {isPurging ? "Purging..." : "Purge All"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={() => {
+          confirmRowDelete();
+        }}
+        isDeleting={isDeleting}
+      />
+      <BulkDeleteConfirmDialog
+        open={bulkDeleteConfirmOpen}
+        onOpenChange={setBulkDeleteConfirmOpen}
+        onConfirm={() => {
+          handleBulkDelete();
+        }}
+        selectionCount={selectionCount}
+        isDeleting={isBulkDeleting}
+      />
+      <PurgeConfirmDialog
+        open={purgeConfirmOpen}
+        onOpenChange={setPurgeConfirmOpen}
+        onConfirm={handlePurgeAll}
+        totalDocuments={total}
+        isPurging={isPurging}
+      />
     </div>
   );
 };
