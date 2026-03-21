@@ -198,6 +198,12 @@ Common missing `@kenchi/shared` mocks in services/api tests:
 - `updateKeyVersion` callback only called when `errors === 0`
 - Test partial failures: mix of good and bad encrypted values in same batch
 
+## Chat/Copilot Feature Test Coverage (2026-03-19)
+
+- See [chat-feature-tests.md](./chat-feature-tests.md) for details
+- 90 tests: helpers(34), chatService(30), chatContextAdapter(16), chatLLMAdapter(10)
+- Co-located tests (same directory as source)
+
 ## Route Test Pattern (supertest + Express)
 
 - Use `supertest` with `express()` app + error middleware for route-level tests

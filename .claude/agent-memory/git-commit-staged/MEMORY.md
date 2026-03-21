@@ -39,6 +39,9 @@ If prettier's `--check` fails, fix with `npx prettier --write <file>` before re-
 
 ## ESLint Rules to Watch
 
+- **`no-duplicate-imports`**: Separate `import` and `import type` from the same module are treated as duplicates. Must use inline `type` keyword: `import { Foo, type Bar } from "module"`. This applies to all imports including `@kenchi/shared`, `react`, and hook barrel imports.
 - **`id-denylist`**: Single-letter identifiers like `e` are banned. Use descriptive names like `clickEvent`, `keyEvent` instead.
+- **`require-yield`**: Generator functions must contain at least one `yield`. In tests with mock generators that immediately throw, add a `yield;` before the throw.
+- **Unused params**: Prefix with `_` (e.g., `_context`) for params required by interface but unused in implementation.
 - **Intentional eslint-disable comments**: Do NOT remove eslint-disable comments for `no-console` (ErrorBoundary), `no-new` (Notification), or `@typescript-eslint/no-non-null-assertion` (main.tsx root element) -- these are legitimate exceptions that lint-staged will reject without the disables.
 - **`@typescript-eslint/no-shadow`**: Inner callback params must not shadow outer function params (e.g., `event` inside `onClick` when component receives `event` prop).

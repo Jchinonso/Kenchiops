@@ -138,4 +138,8 @@ export const queryKeys = {
       connection: () => ["integrations", "gitlab", "connection"] as const,
     },
   },
+  chat: {
+    all: ["chat"] as const,
+    conversations: () => ["chat", "conversations"] as const,
+  },
 } as const;

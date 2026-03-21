@@ -645,3 +645,32 @@ export {
   revokeApiKey,
   hashApiKey,
 } from "./apiKey/index.js";
+
+// Chat conversation module (Copilot Drawer)
+export {
+  // Types
+  type ChatConversationRow,
+  type ChatMessageRow,
+  type ChatConversation,
+  type ChatMessage,
+  type ChatMessageRole,
+  type CreateConversationInput,
+  type CreateMessageInput,
+  type TokenCountRow,
+  type DeletedCountRow,
+  // Helpers
+  mapRowToConversation,
+  mapRowToMessage,
+  validateCreateConversationInput,
+  validateCreateMessageInput,
+  // Repository operations
+  createConversation,
+  findConversationById,
+  findConversationsByUser,
+  deleteConversation,
+  updateConversationTitle,
+  createMessage,
+  getMessagesByConversation,
+  getConversationTokenCount,
+  deleteOldestMessages,
+} from "./chatConversation/index.js";

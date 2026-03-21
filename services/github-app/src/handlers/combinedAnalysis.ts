@@ -75,6 +75,7 @@ interface FetchFailedLogsOptions {
   readonly repositoryFullName: string;
   readonly commitSha: string;
   readonly provider: CIProvider;
+  readonly tenantId: string | undefined;
 }
 
 interface AnalysisCollectionOptions {
@@ -123,8 +124,16 @@ interface BuildAggregationOptions {
 const fetchFailedLogs = async (
   options: FetchFailedLogsOptions
 ): Promise<AllFailedJobsLogs | null> => {
-  const { isGitHub, installationId, owner, repoName, repositoryFullName, commitSha, provider } =
-    options;
+  const {
+    isGitHub,
+    installationId,
+    owner,
+    repoName,
+    repositoryFullName,
+    commitSha,
+    provider,
+    tenantId,
+  } = options;
 
   if (isGitHub) {
     return fetchAllFailedJobsLogs(installationId, owner, repoName, commitSha);
@@ -132,7 +141,7 @@ const fetchFailedLogs = async (
 
   const context: RequestContext = {
     requestId: crypto.randomUUID(),
-    tenantId: "system",
+    tenantId: tenantId ?? "system",
   };
   const adapters = getCIProviderAdapters(provider);
   const fetchedLogs = await adapters.logFetcher.fetchAllFailedLogs(
@@ -339,6 +348,10 @@ export const processCombinedAnalysis = async (
   const { repository, installationId, commitSha, provider } = pending;
   const isGitHub = provider === CI_PROVIDERS.GITHUB_ACTIONS;
 
+  const tenantId = isGitHub
+    ? (await findTenantByGitHubInstallation(installationId))?.id
+    : await resolveTenantForProvider(provider);
+
   logger.info("Starting per-job analysis for pending aggregation", {
     repository: repository.fullName,
     commitSha: commitSha.substring(0, 7),
@@ -356,6 +369,7 @@ export const processCombinedAnalysis = async (
       repositoryFullName: repository.fullName,
       commitSha,
       provider,
+      tenantId,
     });
 
     if (!allJobsLogs) {
@@ -399,9 +413,6 @@ export const processCombinedAnalysis = async (
     }
 
     const apiUrl = `${config.API_URL}/api/analyze`;
-    const tenantId = isGitHub
-      ? (await findTenantByGitHubInstallation(installationId))?.id
-      : await resolveTenantForProvider(provider);
 
     // Enforce per-tenant concurrency limit on analysis jobs
     const slotResult = tenantId ? acquireAnalysisSlot(tenantId) : null;

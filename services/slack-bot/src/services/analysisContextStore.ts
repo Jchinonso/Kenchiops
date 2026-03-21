@@ -42,8 +42,8 @@ const cleanupOldContext = (): void => {
   }
 };
 
-// Start periodic cleanup
-setInterval(cleanupOldContext, ANALYSIS_CONTEXT_STORE_CONFIG.CLEANUP_INTERVAL_MS);
+// Start periodic cleanup — .unref() prevents this timer from keeping the process alive in tests
+setInterval(cleanupOldContext, ANALYSIS_CONTEXT_STORE_CONFIG.CLEANUP_INTERVAL_MS).unref();
 
 // ==================== Public API ====================
 

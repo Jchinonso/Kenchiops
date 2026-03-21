@@ -627,6 +627,45 @@ export {
   hashApiKey,
 } from "./database/index.js";
 
+// Chat conversation module (Copilot Drawer)
+export {
+  type ChatConversation,
+  type ChatMessage,
+  type ChatMessageRole,
+  type CreateConversationInput,
+  type CreateMessageInput,
+  createConversation,
+  findConversationById,
+  findConversationsByUser,
+  deleteConversation,
+  updateConversationTitle,
+  createMessage,
+  getMessagesByConversation,
+  getConversationTokenCount,
+  deleteOldestMessages,
+} from "./database/index.js";
+
+// Chat types and service (Copilot Drawer streaming and context)
+export type {
+  ChatCompletionInput,
+  ChatPageContext,
+  ChatPageType,
+  ChatStreamChunkType,
+  ChatStreamChunk,
+  ChatRAGSource,
+  ChatLLMStreamDelta,
+  ChatLLMPort,
+  ChatLLMMessage,
+  ChatContextPort,
+  ChatContextData,
+  ChatRAGResult,
+  ChatRepositoryPort,
+  ChatConversationSummary,
+  CreateConversationPortInput,
+  CreateMessagePortInput,
+} from "./chat/index.js";
+export { createChatService, type ChatService, type ChatServiceDeps } from "./chat/index.js";
+
 // HTTP utilities
 export {
   errorHandler,

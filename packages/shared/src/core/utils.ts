@@ -35,10 +35,16 @@ export const withTimeout = <T>(
   timeoutMs: number,
   errorMessage = "Operation timed out"
 ): Promise<T> => {
+  // let: timeoutId must be cleared after race to prevent leaked timer handle in tests
+  let timeoutId: ReturnType<typeof setTimeout> | null = null; // let: cleared after Promise.race
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
   });
-  return Promise.race([promise, timeoutPromise]);
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+  });
 };
 
 // ==================== Error Utilities ====================
