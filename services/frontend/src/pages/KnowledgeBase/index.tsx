@@ -31,8 +31,10 @@ import {
   useKnowledgeBaseStats,
   useKnowledgeDocuments,
   useDeleteDocument,
+  usePurgeAllDocuments,
   type KnowledgeDocDTO,
 } from "@/hooks/useKnowledgeBase";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -60,6 +62,7 @@ import { PAGINATION_CONFIG, ALL_TYPES_VALUE } from "./constants";
 
 export const KnowledgeBase = () => {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<number>(PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
   const [selectedDocType, setSelectedDocType] = useState<string>(ALL_TYPES_VALUE);
@@ -67,11 +70,13 @@ export const KnowledgeBase = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
 
   const docTypeFilter = selectedDocType === ALL_TYPES_VALUE ? undefined : selectedDocType;
 
   const { data: stats, isLoading: statsLoading } = useKnowledgeBaseStats();
   const { deleteDocument, isDeleting } = useDeleteDocument();
+  const { purgeAll, isPurging } = usePurgeAllDocuments(user?.tenantId ?? null);
   const {
     data: docsData,
     isLoading: docsLoading,
@@ -204,6 +209,17 @@ export const KnowledgeBase = () => {
           <Plus className="w-4 h-4" />
           Add Document
         </Button>
+
+        {total > 0 && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setPurgeConfirmOpen(true)}
+            disabled={isPurging}
+          >
+            {isPurging ? "Purging..." : "Purge All Documents"}
+          </Button>
+        )}
       </div>
 
       {/* Documents Table */}
@@ -389,6 +405,42 @@ export const KnowledgeBase = () => {
               )}
             >
               {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Purge All Confirmation Dialog */}
+      <AlertDialog open={purgeConfirmOpen} onOpenChange={setPurgeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Purge All Documents</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all {total} knowledge documents for your organization.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isPurging}
+              onClick={async (event) => {
+                event.preventDefault();
+                const success = await purgeAll();
+                if (success) {
+                  toast.success("All documents purged");
+                  setPurgeConfirmOpen(false);
+                } else {
+                  toast.error("Failed to purge documents");
+                }
+              }}
+              className={cn(
+                !isPurging
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed pointer-events-none"
+              )}
+            >
+              {isPurging ? "Purging..." : "Purge All"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
