@@ -18,6 +18,11 @@ import type {
 } from "./types";
 import { buildKnowledgeDocsUrl } from "./urlBuilders";
 
+/** Response shape for bulk delete operation */
+interface BulkDeleteResponse {
+  readonly deletedCount: number;
+}
+
 // ==================== Constants ====================
 
 /** Data considered fresh for 30 seconds (matches sidebar prefetch staleTime). */
@@ -196,5 +201,51 @@ export const useDeleteDocument = (): {
       isDeleting: mutation.isPending,
     }),
     [deleteDocument, mutation.isPending]
+  );
+};
+
+// ==================== Bulk Delete Documents Mutation ====================
+
+/**
+ * Mutation hook for bulk deleting knowledge documents by IDs.
+ * Uses POST /api/rag/doc/bulk-delete. Invalidates all knowledge base queries on success.
+ */
+export const useBulkDeleteDocuments = (): {
+  readonly bulkDelete: (ids: readonly string[]) => Promise<number>;
+  readonly isBulkDeleting: boolean;
+} => {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (ids: readonly string[]): Promise<BulkDeleteResponse> =>
+      fetchMutation<BulkDeleteResponse>("/api/rag/doc/bulk-delete", {
+        method: "POST",
+        body: { ids },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.knowledgeBase.all,
+      });
+    },
+  });
+
+  const bulkDelete = useCallback(
+    async (ids: readonly string[]): Promise<number> => {
+      try {
+        const result = await mutation.mutateAsync(ids);
+        return result.deletedCount;
+      } catch {
+        return 0;
+      }
+    },
+    [mutation]
+  );
+
+  return useMemo(
+    () => ({
+      bulkDelete,
+      isBulkDeleting: mutation.isPending,
+    }),
+    [bulkDelete, mutation.isPending]
   );
 };

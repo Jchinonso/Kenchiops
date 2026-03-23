@@ -19,5 +19,6 @@ export {
   useKnowledgeDocuments,
   useAddDocument,
   useDeleteDocument,
+  useBulkDeleteDocuments,
   usePurgeAllDocuments,
 } from "./hooks";
