@@ -49,3 +49,7 @@ These must come BEFORE the component import.
 Full "Get Set Up" card only shows when `completedCount < 2`.
 Completed steps: githubConnected + slackConnected + (totalAnalyses > 0).
 To test full card: set githubConnected=false, totalAnalyses=0.
+
+## Backend (packages/shared) ESM Mocking
+
+See [esm_mocking_pattern.md](esm_mocking_pattern.md) - must use `jest.unstable_mockModule()` + dynamic `await import()` instead of `jest.mock()` for reliable ESM interception.

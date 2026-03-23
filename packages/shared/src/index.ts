@@ -645,7 +645,12 @@ export {
   getMessagesByConversation,
   getConversationTokenCount,
   deleteOldestMessages,
+  countConversationsByUser,
+  countMessagesByConversation,
 } from "./database/index.js";
+
+// Chat token usage module (Budget enforcement)
+export { type ChatTokenUsage, getTodayTokenUsage, incrementTokenUsage } from "./database/index.js";
 
 // Chat types and service (Copilot Drawer streaming and context)
 export type {
@@ -656,6 +661,7 @@ export type {
   ChatStreamChunk,
   ChatRAGSource,
   ChatLLMStreamDelta,
+  ChatLLMOptions,
   ChatLLMPort,
   ChatLLMMessage,
   ChatContextPort,
@@ -665,8 +671,13 @@ export type {
   ChatConversationSummary,
   CreateConversationPortInput,
   CreateMessagePortInput,
+  ChatBudgetStatus,
+  ChatBudgetPort,
 } from "./chat/index.js";
 export { createChatService, type ChatService, type ChatServiceDeps } from "./chat/index.js";
+export { classifyChatMessageTopic } from "./chat/index.js";
+export { checkChatBudget, incrementChatTokenUsage } from "./chat/index.js";
+export { chatUserRateLimit } from "./chat/index.js";
 
 // HTTP utilities
 export {

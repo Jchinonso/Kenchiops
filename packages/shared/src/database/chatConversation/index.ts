@@ -18,6 +18,7 @@ export type {
   CreateMessageInput,
   TokenCountRow,
   DeletedCountRow,
+  ConversationCountRow,
 } from "./types.js";
 
 // Helpers (includes validation and mappers)
@@ -39,4 +40,6 @@ export {
   getMessagesByConversation,
   getConversationTokenCount,
   deleteOldestMessages,
+  countConversationsByUser,
+  countMessagesByConversation,
 } from "./repository.js";

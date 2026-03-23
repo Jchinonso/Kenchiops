@@ -13,7 +13,9 @@ import {
   createLogger,
   getErrorMessage,
   ExternalServiceError,
+  CHAT_DEFAULTS,
   type ChatLLMPort,
+  type ChatLLMOptions,
   type ChatLLMStreamDelta,
   type ChatLLMMessage,
   type RequestContext,
@@ -33,7 +35,8 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
   async *createStreamingCompletion(
     messages: readonly ChatLLMMessage[],
     model: string,
-    context: RequestContext
+    context: RequestContext,
+    options?: ChatLLMOptions
   ): AsyncGenerator<ChatLLMStreamDelta> {
     const logger = createLogger("chat-llm-adapter");
     const startTime = Date.now();
@@ -45,6 +48,7 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
         model,
         messages: messages.map(({ role, content }) => ({ role, content })),
         stream: true,
+        max_tokens: options?.maxTokens ?? CHAT_DEFAULTS.MAX_RESPONSE_TOKENS,
       });
 
       // Hard timeout on initial connection via Promise.race

@@ -104,3 +104,8 @@ export interface TokenCountRow {
 export interface DeletedCountRow {
   readonly deleted_count: string;
 }
+
+/** Row shape for COUNT(*) queries. */
+export interface ConversationCountRow {
+  readonly count: string; // PostgreSQL returns count as string
+}

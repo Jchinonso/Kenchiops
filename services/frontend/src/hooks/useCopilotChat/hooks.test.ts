@@ -227,7 +227,7 @@ describe("useCopilotChat", () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       expect(body.pageContext).toEqual({ pageType: "overview" });
-      expect(body.conversationId).toBeNull();
+      expect(body.conversationId).toBeUndefined();
     });
 
     it("should set isStreaming to true during streaming", async () => {
@@ -506,6 +506,214 @@ describe("useCopilotChat", () => {
       await waitFor(() => {
         expect(result.current.isStreaming).toBe(false);
       });
+    });
+  });
+
+  describe("budget_warning SSE handling", () => {
+    it("should set budgetWarning state from budget_warning chunk", async () => {
+      mockFetch.mockResolvedValueOnce(
+        createStreamResponse([
+          'data: {"type":"budget_warning","ratioUsed":0.85,"remaining":7500}',
+          'data: {"type":"token","content":"Hello"}',
+          'data: {"type":"done"}',
+        ])
+      );
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("Hi");
+      });
+
+      await waitFor(() => {
+        expect(result.current.budgetWarning).toEqual({
+          ratioUsed: 0.85,
+          remaining: 7500,
+        });
+      });
+
+      // Normal streaming should still complete
+      expect(result.current.messages[1].content).toBe("Hello");
+    });
+
+    it("should have null budgetWarning in initial state", () => {
+      const { result } = renderHook(() => useCopilotChat());
+
+      expect(result.current.budgetWarning).toBeNull();
+    });
+
+    it("should clear budgetWarning on sendMessage", async () => {
+      // First: trigger a budget warning
+      mockFetch.mockResolvedValueOnce(
+        createStreamResponse([
+          'data: {"type":"budget_warning","ratioUsed":0.9,"remaining":5000}',
+          'data: {"type":"done"}',
+        ])
+      );
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("First");
+      });
+
+      await waitFor(() => {
+        expect(result.current.budgetWarning).not.toBeNull();
+      });
+
+      // Wait for cooldown to expire before sending second message
+      await waitFor(
+        () => {
+          expect(result.current.isCooldown).toBe(false);
+        },
+        { timeout: 3000 }
+      );
+
+      // Second: send another message — budgetWarning should be cleared
+      vi.spyOn(crypto, "randomUUID")
+        .mockReturnValueOnce("user-msg-2" as ReturnType<typeof crypto.randomUUID>)
+        .mockReturnValueOnce("assistant-msg-2" as ReturnType<typeof crypto.randomUUID>);
+
+      mockFetch.mockResolvedValueOnce(createStreamResponse(['data: {"type":"done"}']));
+
+      act(() => {
+        result.current.sendMessage("Second");
+      });
+
+      // budgetWarning should be null immediately after sendMessage
+      // (before the new stream arrives)
+      expect(result.current.budgetWarning).toBeNull();
+    });
+
+    it("should clear budgetWarning on clearConversation", async () => {
+      // Trigger a budget warning
+      mockFetch.mockResolvedValueOnce(
+        createStreamResponse([
+          'data: {"type":"budget_warning","ratioUsed":0.95,"remaining":2500}',
+          'data: {"type":"done"}',
+        ])
+      );
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("Hi");
+      });
+
+      await waitFor(() => {
+        expect(result.current.budgetWarning).not.toBeNull();
+      });
+
+      act(() => {
+        result.current.clearConversation();
+      });
+
+      expect(result.current.budgetWarning).toBeNull();
+    });
+
+    it("should include budgetWarning in return value", () => {
+      const { result } = renderHook(() => useCopilotChat());
+
+      // budgetWarning should exist as a property of the hook result
+      expect(result.current).toHaveProperty("budgetWarning");
+    });
+  });
+
+  describe("cooldown guard", () => {
+    it("should have isCooldown as false initially", () => {
+      const { result } = renderHook(() => useCopilotChat());
+
+      expect(result.current.isCooldown).toBe(false);
+    });
+
+    it("should set isCooldown to true after sending a message", async () => {
+      mockFetch.mockResolvedValueOnce(createStreamResponse(['data: {"type":"done"}']));
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("Hello");
+      });
+
+      expect(result.current.isCooldown).toBe(true);
+    });
+
+    it("should set isCooldown to false after 2 seconds", async () => {
+      vi.useFakeTimers();
+
+      mockFetch.mockResolvedValueOnce(createStreamResponse(['data: {"type":"done"}']));
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("Hello");
+      });
+
+      expect(result.current.isCooldown).toBe(true);
+
+      // Advance past the cooldown period (2000ms)
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+
+      expect(result.current.isCooldown).toBe(false);
+
+      vi.useRealTimers();
+    });
+
+    it("should silently ignore a second message sent during cooldown", async () => {
+      vi.useFakeTimers();
+
+      mockFetch.mockResolvedValueOnce(createStreamResponse(['data: {"type":"done"}']));
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("First");
+      });
+
+      // Wait for stream to finish so isStreaming is false
+      // (we need to flush the microtask queue for the stream to complete)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      // Reset UUID mocks for potential second message
+      vi.spyOn(crypto, "randomUUID")
+        .mockReturnValueOnce("user-msg-2" as ReturnType<typeof crypto.randomUUID>)
+        .mockReturnValueOnce("assistant-msg-2" as ReturnType<typeof crypto.randomUUID>);
+
+      // Try to send second message while still in cooldown
+      act(() => {
+        result.current.sendMessage("Second");
+      });
+
+      // Only one fetch call should have been made
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Only the first message pair should exist
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages[0].content).toBe("First");
+
+      vi.useRealTimers();
+    });
+
+    it("should clear isCooldown on clearConversation", async () => {
+      mockFetch.mockResolvedValueOnce(createStreamResponse(['data: {"type":"done"}']));
+
+      const { result } = renderHook(() => useCopilotChat());
+
+      act(() => {
+        result.current.sendMessage("Hello");
+      });
+
+      expect(result.current.isCooldown).toBe(true);
+
+      act(() => {
+        result.current.clearConversation();
+      });
+
+      expect(result.current.isCooldown).toBe(false);
     });
   });
 

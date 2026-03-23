@@ -200,6 +200,12 @@
 3. Route handler calls repository directly -- no service layer
 4. FeedbackSection onClick handlers don't `void` the async call
 
+## Chat Token Protection Audit (2026-03-23) -- see `chat-token-protection-audit.md`
+
+- HIGH: `handleChatCompletion` unguarded `requireTenantId` throw, chatService imports `isOpenRouterProvider` (Rule #5), `.push()` streaming accumulator
+- MEDIUM: unused `context` param in `getTodayTokenUsage`, redundant SQL index in migration 039, duplicate `ChatStreamChunk` type in frontend
+- Overall quality high: all readonly, all let justified, no any, structured logging, proper ports, fail-open design
+
 ## RAG Phase 2 Knowledge Base Audit (2026-03-09)
 
 ### Files: coreRoutes.ts (new handler), knowledgeDoc/repository.ts (new functions), KnowledgeBase.tsx, hooks/useKnowledgeBase/, DashboardSidebar.tsx, Dashboard/index.tsx, rag/types.ts, queryKeys.ts
