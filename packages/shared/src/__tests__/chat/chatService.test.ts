@@ -45,6 +45,7 @@ jest.mock("../../core/config.js", () => ({
 
 jest.mock("../../llm/providers/llmProvider/clientFactory.js", () => ({
   isOpenRouterProvider: () => false,
+  resolveLLMModel: () => "test-model",
 }));
 
 // Now import the module under test (after mocks are set up)

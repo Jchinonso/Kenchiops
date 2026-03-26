@@ -232,7 +232,7 @@ describe("createChatLLMAdapter", () => {
           operation: "streamChatCompletion",
           durationMs: expect.any(Number),
           model: "gpt-4",
-          category: "non_retryable",
+          category: "unknown",
           retryable: false,
           requestId: "test-req-id",
           tenantId: "test-tenant",
