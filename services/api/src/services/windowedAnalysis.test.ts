@@ -15,7 +15,7 @@ import type {
   Event,
   LLMAnalysisResult,
 } from "@kenchi/shared";
-import type { WindowAnalysisInput, WindowAnalysisResult } from "./deployAnalysisTypes.js";
+import type { WindowAnalysisInput } from "./deployAnalysisTypes.js";
 
 // ==================== Mock Setup ====================
 
@@ -46,11 +46,11 @@ jest.mock("./analysisService.js", () => ({
   analyzeFailure: (...args: readonly unknown[]) => mockAnalyzeFailure(...args),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { processWindow } =
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   require("./windowedAnalysis.js") as typeof import("./windowedAnalysis.js");
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { WINDOW_ANALYSIS_BUDGET, EVENT_TYPES, EVENT_SEVERITY } =
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   require("@kenchi/shared") as typeof import("@kenchi/shared");
 
 // ==================== Test Fixtures ====================

@@ -52,8 +52,8 @@ jest.mock("./windowedAnalysis.js", () => ({
 }));
 
 // Import after mocks — use require to avoid top-level await in Jest CJS transform
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createDeployAnalysisService } =
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   require("./deployAnalysisService.js") as typeof import("./deployAnalysisService.js");
 
 // ==================== Test Fixtures ====================

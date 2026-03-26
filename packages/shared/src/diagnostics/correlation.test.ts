@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { CorrelatedDeployEvent, CorrelatedAlertEvent, CorrelatedIncident } from "./types.js";
+import type { CorrelatedDeployEvent, CorrelatedAlertEvent } from "./types.js";
 import type { RequestContext } from "../core/types.js";
 
 // ==================== Mocks ====================

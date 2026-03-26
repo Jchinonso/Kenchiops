@@ -8,12 +8,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
-import type {
-  IngestionBufferPort,
-  BufferMetadata,
-  FlushTriggerResult,
-  DeployPlatform,
-} from "@kenchi/shared";
+import type { IngestionBufferPort, BufferMetadata } from "@kenchi/shared";
 import type { DeployAnalysisService } from "../services/deployAnalysisService.js";
 
 // ==================== Mock Setup ====================
@@ -40,11 +35,11 @@ jest.mock("@kenchi/shared", () => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { startFlushTriggerWorker } =
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   require("./flushTriggerWorker.js") as typeof import("./flushTriggerWorker.js");
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { INGESTION_REDIS_KEYS, STREAM_LIFECYCLE, REDIS_SCAN } =
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   require("@kenchi/shared") as typeof import("@kenchi/shared");
 
 // ==================== Test Fixtures ====================

@@ -76,7 +76,7 @@ const createAlertDetailResponse = (
 });
 
 const createAlertLogsResponse = (
-  logs: Record<string, unknown>[] = []
+  logs: Array<Record<string, unknown>> = []
 ): Record<string, unknown> => ({
   data:
     logs.length > 0
@@ -101,7 +101,7 @@ const createAlertLogsResponse = (
 });
 
 const createAlertNotesResponse = (
-  notes: Record<string, unknown>[] = []
+  notes: Array<Record<string, unknown>> = []
 ): Record<string, unknown> => ({
   data:
     notes.length > 0
@@ -152,7 +152,7 @@ describe("createOpsGenieContextAdapter", () => {
       expect(mockResilientGet).toHaveBeenCalledTimes(3);
 
       // Verify URL patterns
-      const calls = mockResilientGet.mock.calls;
+      const { calls } = mockResilientGet.mock;
       expect(calls[0][0]).toBe("https://api.opsgenie.com/v2/alerts/alert-og-456");
       expect(calls[1][0]).toBe("https://api.opsgenie.com/v2/alerts/alert-og-456/logs");
       expect(calls[2][0]).toBe("https://api.opsgenie.com/v2/alerts/alert-og-456/notes");

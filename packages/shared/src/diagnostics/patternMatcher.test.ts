@@ -7,8 +7,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-import type { PatternMatchResult, ErrorSignature } from "./patternMatcher.js";
-import type { DiagnosticResult } from "./types.js";
+import type { PatternMatchResult } from "./patternMatcher.js";
 
 import { matchKnownPattern, buildDiagnosticFromPattern } from "./patternMatcher.js";
 

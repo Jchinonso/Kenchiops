@@ -75,7 +75,7 @@ export const prepareCompletion = async (
   );
 
   // Build pre-stream chunks immutably (at most 3 elements)
-  const preStreamChunks: ReadonlyArray<ChatStreamChunk> = [
+  const preStreamChunks: readonly ChatStreamChunk[] = [
     ...(conversationResult.isNew
       ? [{ type: "conversation_created" as const, conversationId }]
       : []),

@@ -8,12 +8,7 @@
 
 import { describe, it, expect } from "@jest/globals";
 import type { LLMAnalysisResult, FailureCategory } from "../core/types.js";
-import type {
-  DiagnosticResult,
-  DegradedResult,
-  DiagnosticRAGContext,
-  ProblemCategory,
-} from "./types.js";
+import type { DegradedResult, DiagnosticRAGContext, ProblemCategory } from "./types.js";
 
 import { mapLLMAnalysisToDiagnostic, buildDegradedFromPipelineFailure } from "./mapper.js";
 

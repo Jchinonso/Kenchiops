@@ -69,7 +69,9 @@ const createSentryEventResponse = (
   ...overrides,
 });
 
-const createExceptionEntry = (frames: Record<string, unknown>[] = []): Record<string, unknown> => ({
+const createExceptionEntry = (
+  frames: Array<Record<string, unknown>> = []
+): Record<string, unknown> => ({
   type: "exception",
   data: {
     values: [

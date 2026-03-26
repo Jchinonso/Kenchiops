@@ -5,7 +5,7 @@
  * and generates fingerprints for deduplication.
  */
 
-import { ValidationError, createLogger, redactObject, truncateText } from "@kenchi/shared";
+import { ValidationError, createLogger, redactObject } from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { NormalizedAlert, AlertSeverity } from "../types/incidentTypes.js";
 import {
