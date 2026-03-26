@@ -103,7 +103,8 @@ export const createIncidentAlert = async (
  */
 export const getAlertById = async (
   id: string,
-  tenantId: string
+  tenantId: string,
+  _context?: import("../../core/types.js").RequestContext
 ): Promise<IncidentAlertRecord | null> => {
   validateIncidentAlertId(id);
 

@@ -11,6 +11,7 @@ import { query, createLogger, generateEventId, validateNonEmptyString } from "..
 import type { RequestContext } from "../../core/types.js";
 import type { ChatTokenUsageRow, ChatTokenUsage } from "./types.js";
 import { mapRowToTokenUsage } from "./helpers.js";
+import { CHAT_DEFAULTS } from "../../constants/api.js";
 
 const logger = createLogger("chat-token-usage-repository");
 
@@ -80,12 +81,22 @@ export const incrementTokenUsage = async (
     return;
   }
 
+  if (tokensConsumed > CHAT_DEFAULTS.MAX_TOKENS_PER_INCREMENT) {
+    logger.warn("tokensConsumed exceeds maximum — clamping to cap", {
+      tokensConsumed,
+      capped: CHAT_DEFAULTS.MAX_TOKENS_PER_INCREMENT,
+      ...context,
+    });
+  }
+
+  const cappedTokens = Math.min(tokensConsumed, CHAT_DEFAULTS.MAX_TOKENS_PER_INCREMENT);
+
   const id = generateEventId("ctu");
 
-  await query(UPSERT_TOKEN_USAGE, [id, tenantId, tokensConsumed]);
+  await query(UPSERT_TOKEN_USAGE, [id, tenantId, cappedTokens]);
 
   logger.info("Incremented chat token usage", {
-    tokensConsumed,
+    tokensConsumed: cappedTokens,
     ...context,
   });
 };

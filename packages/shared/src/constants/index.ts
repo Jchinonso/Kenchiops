@@ -379,6 +379,21 @@ export {
   TENANT_QUOTA_REDIS,
 } from "./concurrency.js";
 
+// Ingestion buffer constants
+export {
+  INGESTION_BUFFER_DEFAULTS,
+  FLUSH_TRIGGER_DEFAULTS,
+  PLATFORM_FLUSH_TRIGGERS,
+  WINDOW_ANALYSIS_BUDGET,
+  INGESTION_REDIS_KEYS,
+  FLUSH_LOCK_DEFAULTS,
+  STREAM_LIFECYCLE,
+  THROTTLE_TIERS,
+  THROTTLE_BUDGET_THRESHOLDS,
+  RAILWAY_STREAMING,
+  LOG_DRAIN_LIMITS,
+} from "./ingestion.js";
+
 // Redis constants
 export {
   REDIS_STATUS,
@@ -644,6 +659,15 @@ export {
   GITLAB_MAX_FAILED_JOBS,
 } from "./gitlab.js";
 
+// CircleCI constants
+export {
+  CIRCLECI_SIGNATURE_HEADER,
+  CIRCLECI_SIGNATURE_PREFIX,
+  CIRCLECI_FAILURE_STATUSES,
+  CIRCLECI_MAX_FAILED_JOBS,
+  CIRCLECI_API_BASE_URL,
+} from "./circleci.js";
+
 // Datadog constants
 export { DATADOG_ALERT_STATUSES, DATADOG_FAILURE_STATUSES } from "./datadog.js";
 
@@ -697,6 +721,14 @@ export {
 
 // Alerting threshold constants
 export { ALERT_THRESHOLDS_WARNING, ALERT_THRESHOLDS_CRITICAL } from "./alerting.js";
+
+// Alert budget constants
+export {
+  ALERT_BUDGET_BY_PLAN,
+  ALERT_BUDGET_DEFAULT_PLAN,
+  ALERT_BUDGET_REDIS_KEYS,
+  ALERT_BUDGET_REDIS_TTL,
+} from "./alertBudget.js";
 
 // Auth constants
 export {

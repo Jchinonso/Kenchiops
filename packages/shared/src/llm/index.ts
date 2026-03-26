@@ -94,6 +94,7 @@ export {
   // Client factory
   isOpenRouterProvider,
   getEffectiveBaseUrl,
+  resolveLLMModel,
   createLLMSDKClient,
   getLLMSDKClient,
   resetLLMSDKClient,

@@ -83,6 +83,7 @@ export interface CreateConversationInput {
  */
 export interface CreateMessageInput {
   readonly conversationId: string;
+  readonly tenantId: string;
   readonly role: ChatMessageRole;
   readonly content: string;
   readonly tokenCount?: number;

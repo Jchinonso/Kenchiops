@@ -15,7 +15,10 @@ export interface CopilotMessage {
 
 // ==================== Stream Chunk Types ====================
 
-// NOTE: Keep in sync with ChatStreamChunk in packages/shared/src/chat/types.ts
+// SYNC: Mirrors ChatStreamChunk, ChatRAGSource, ChatPageContext from
+// packages/shared/src/chat/types.ts — frontend Docker build context does not
+// include the shared package, so these must be duplicated here. When changing
+// the shape in shared, update this file to match.
 export type ChatStreamChunk =
   | { readonly type: "token"; readonly content: string }
   | { readonly type: "done" }

@@ -165,6 +165,21 @@ Common missing `@kenchi/shared` mocks in services/api tests:
 - Running `npx vitest` from monorepo root without `--config` will fail to resolve `@/` imports
 - SEVERITY_STYLES in formatters.ts includes "critical" as a valid severity (purple style) -- tests updated
 
+## Alert Context Truncation Test Coverage (2026-03-26)
+
+- `packages/shared/src/alertContext/truncation.test.ts` - 64 tests (co-located, pure functions, no mocks)
+- Bug found: `slice(-0)` in `truncateLogSnippets`/`truncateStackFrames` returns full array (JS spec: `-0 === 0`). Tests document this edge case.
+
+## Ingestion Buffer Test Coverage (2026-03-26)
+
+- `packages/shared/src/ingestion/bufferOperations.test.ts` - 38 tests (append, flush, close, isClientReady)
+- `packages/shared/src/ingestion/bufferQueries.test.ts` - 42 tests (getMetadata, getSummary, updateSummary, checkFlushTriggers)
+- Mock pattern: in-memory Redis store (mockRedisStore, mockSortedSets, mockHashes) simulating sorted sets, hashes, strings
+- Mock `../queue/redisClient.js` returning mock client, `../core/index.js` for logger/withTimeout/getErrorMessage
+- bufferQueries mocks `./bufferOperations.js` for `isClientReady` since it cross-imports
+- All functions are fail-open (Redis errors return empty/null defaults, never throw)
+- Budget-aware throttling: MODERATE tier at budgetRatio 0.1-0.3 (3x window, 0.5x volume), SEVERE at <0.1 (6x window, 0.25x volume)
+
 ## Multi-Tenant Infrastructure Test Coverage (2026-02-25)
 
 - Co-located tests (same directory as source, not **tests**/)

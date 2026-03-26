@@ -25,11 +25,16 @@ import { apiKeyRoutes } from "./apiKeyRoutes.js";
 import { billingRoutes } from "./billingRoutes.js";
 import { feedbackRoutes } from "./feedbackRoutes.js";
 import { chatRoutes } from "./chatRoutes.js";
+import { createDeployWebhookRoutes } from "./deployWebhookRoutes.js";
+import type { DeployContainer } from "../container/deployContainer.js";
 
 /**
- * Register all routes on the Express app
+ * Register all routes on the Express app.
+ *
+ * @param app - Express application
+ * @param deployContainer - Optional deploy analysis container (pass to enable deploy webhooks)
  */
-export const registerRoutes = (app: Express): void => {
+export const registerRoutes = (app: Express, deployContainer?: DeployContainer): void => {
   // Health check (no prefix)
   app.use(healthRoutes);
 
@@ -89,4 +94,13 @@ export const registerRoutes = (app: Express): void => {
 
   // Chat routes (Copilot Drawer — streaming completions, conversations, messages)
   app.use(chatRoutes);
+
+  // Deploy webhook routes (Vercel, Railway, Render, Netlify — Pipeline A continuous logs)
+  if (deployContainer) {
+    const deployWebhookRoutes = createDeployWebhookRoutes({
+      deployAnalysisService: deployContainer.deployAnalysisService,
+      adapters: deployContainer.adapters,
+    });
+    app.use(deployWebhookRoutes);
+  }
 };

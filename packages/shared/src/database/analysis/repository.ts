@@ -103,7 +103,8 @@ export const createAnalysis = async (input: CreateAnalysisInput): Promise<Analys
  */
 export const getAnalysisById = async (
   id: string,
-  tenantId: string
+  tenantId: string,
+  _context?: import("../../core/types.js").RequestContext
 ): Promise<AnalysisRecord | null> => {
   validateId(id, "id");
   validateId(tenantId, "tenantId");

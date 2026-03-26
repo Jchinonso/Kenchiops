@@ -10,10 +10,8 @@
 
 import { createLogger } from "../core/logger.js";
 import { getErrorMessage, isAppError } from "../core/errors.js";
-import { config } from "../core/config.js";
 import { CHAT_DEFAULTS } from "../constants/api.js";
-import { LLM_DEFAULTS, OPENROUTER_DEFAULTS } from "../constants/index.js";
-import { isOpenRouterProvider } from "../llm/providers/llmProvider/clientFactory.js";
+import { resolveLLMModel } from "../llm/providers/llmProvider/clientFactory.js";
 import type { RequestContext } from "../core/types.js";
 import type {
   ChatCompletionInput,
@@ -28,12 +26,6 @@ import { finalizeCompletion } from "./chatFinalize.js";
 
 const logger = createLogger("chat-streaming");
 
-/** Resolves the LLM model for chat using the config chain. */
-const resolveChatModel = (): string =>
-  config.LLM_MODEL ||
-  config.OPENAI_MODEL ||
-  (isOpenRouterProvider() ? OPENROUTER_DEFAULTS.MODEL : LLM_DEFAULTS.MODEL);
-
 /**
  * Streams LLM tokens, yielding each as a ChatStreamChunk.
  * Returns the collected content and duration via generator return.
@@ -46,7 +38,7 @@ export const collectStreamTokens = async function* (
 ): AsyncGenerator<ChatStreamChunk, StreamResult> {
   const startTime = Date.now();
   let content = ""; // let: accumulated during async streaming iteration
-  const chatModel = resolveChatModel();
+  const chatModel = resolveLLMModel();
 
   const stream = llmPort.createStreamingCompletion(messages, chatModel, context, {
     maxTokens: CHAT_DEFAULTS.MAX_RESPONSE_TOKENS,

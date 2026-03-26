@@ -78,6 +78,7 @@ export const ensureConversation = async (
 export const loadHistoryAndSaveUserMessage = async (
   chatRepository: ChatRepositoryPort,
   conversationId: string,
+  tenantId: string,
   userMessage: string,
   context: RequestContext
 ): Promise<LoadHistoryResult> => {
@@ -101,6 +102,7 @@ export const loadHistoryAndSaveUserMessage = async (
   await chatRepository.createMessage(
     {
       conversationId,
+      tenantId,
       role: "user",
       content: userMessage,
       tokenCount: userTokenCount,
@@ -119,6 +121,7 @@ export const loadHistoryAndSaveUserMessage = async (
 export const persistAssistantMessage = async (
   chatRepository: ChatRepositoryPort,
   conversationId: string,
+  tenantId: string,
   content: string,
   ragContextUsed: boolean,
   context: RequestContext
@@ -127,6 +130,7 @@ export const persistAssistantMessage = async (
   await chatRepository.createMessage(
     {
       conversationId,
+      tenantId,
       role: "assistant",
       content,
       tokenCount,

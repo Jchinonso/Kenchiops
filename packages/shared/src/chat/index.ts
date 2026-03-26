@@ -37,7 +37,7 @@ export type {
   FinalizeCompletionInput,
 } from "./types.js";
 
-export type { ChatService } from "./types.js";
+export type { ChatService, ChatTokenUsageRepositoryPort } from "./types.js";
 
 export { createChatService } from "./chatService.js";
 
@@ -69,6 +69,10 @@ export {
   classifyMessageTopic as classifyChatMessageTopic,
 } from "./helpers.js";
 
-export { checkChatBudget, incrementChatTokenUsage } from "./chatBudget.js";
+export {
+  createChatBudgetFunctions,
+  checkChatBudget,
+  incrementChatTokenUsage,
+} from "./chatBudget.js";
 
 export { chatUserRateLimit } from "./chatRateLimit.js";

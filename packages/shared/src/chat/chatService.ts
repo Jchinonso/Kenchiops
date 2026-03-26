@@ -12,6 +12,7 @@
  * @module chat/chatService
  */
 
+import { AuthorizationError, NotFoundError } from "../core/errors.js";
 import type { RequestContext } from "../core/types.js";
 import type { ChatCompletionInput, ChatServiceDeps, ChatService } from "./types.js";
 import { streamCompletion } from "./chatStreaming.js";
@@ -29,8 +30,30 @@ export const createChatService = (deps: ChatServiceDeps): ChatService => ({
   getConversation: (conversationId: string, tenantId: string, context: RequestContext) =>
     deps.chatRepository.findConversationById(conversationId, tenantId, context),
 
-  getMessages: (conversationId: string, limit: number, context: RequestContext) =>
-    deps.chatRepository.getMessagesByConversation(conversationId, limit, context),
+  getMessages: async (
+    conversationId: string,
+    tenantId: string,
+    userId: string,
+    limit: number,
+    context: RequestContext
+  ) => {
+    const conversation = await deps.chatRepository.findConversationById(
+      conversationId,
+      tenantId,
+      context
+    );
+    if (!conversation) {
+      throw new NotFoundError("Conversation not found", {
+        metadata: { conversationId },
+      });
+    }
+    if (conversation.userId !== userId) {
+      throw new AuthorizationError("You do not have access to this conversation", {
+        operation: "getMessages",
+      });
+    }
+    return deps.chatRepository.getMessagesByConversation(conversationId, limit, context);
+  },
 
   deleteConversation: (conversationId: string, tenantId: string, context: RequestContext) =>
     deps.chatRepository.deleteConversation(conversationId, tenantId, context),

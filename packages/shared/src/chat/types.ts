@@ -221,6 +221,7 @@ export interface CreateConversationPortInput {
 /** Input for creating a message via the port. */
 export interface CreateMessagePortInput {
   readonly conversationId: string;
+  readonly tenantId: string;
   readonly role: "user" | "assistant" | "system";
   readonly content: string;
   readonly tokenCount?: number;
@@ -258,6 +259,8 @@ export interface ChatService {
   ) => Promise<ChatConversationSummary | null>;
   readonly getMessages: (
     conversationId: string,
+    tenantId: string,
+    userId: string,
     limit: number,
     context: import("../core/types.js").RequestContext
   ) => Promise<ReadonlyArray<{ readonly role: string; readonly content: string }>>;
@@ -337,6 +340,19 @@ export interface FinalizeCompletionInput {
 }
 
 // ==================== Budget Types ====================
+
+/** Port interface for chat token usage repository operations. */
+export interface ChatTokenUsageRepositoryPort {
+  readonly getTodayTokenUsage: (
+    tenantId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<{ readonly tokensUsed: number; readonly budgetLimit: number | null } | null>;
+  readonly incrementTokenUsage: (
+    tenantId: string,
+    tokensConsumed: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<void>;
+}
 
 /** Current chat token budget status for a tenant. */
 export interface ChatBudgetStatus {

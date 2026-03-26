@@ -62,3 +62,17 @@ export {
 } from "./tenantQuota.js";
 
 export type { TenantQuotaConfig, QuotaCheckResult } from "./tenantQuotaTypes.js";
+
+// Per-tenant alert budget quotas
+export {
+  getAlertBudgetForPlan,
+  checkAlertAnalysisQuota,
+  incrementAlertAnalysisCount,
+  checkActiveStreamQuota,
+  incrementActiveStreamCount,
+  decrementActiveStreamCount,
+  checkWindowQuota,
+  incrementWindowCount,
+} from "./alertBudgetQuota.js";
+
+export type { AlertBudgetConfig } from "./alertBudgetQuotaTypes.js";

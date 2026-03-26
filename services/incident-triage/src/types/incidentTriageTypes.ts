@@ -32,4 +32,12 @@ export interface IncidentTriageConfig {
   readonly vercelTeamId: string;
   readonly netlifyApiToken: string;
   readonly netlifySiteId: string;
+  readonly sentryWebhookSecret: string;
+  readonly sentryApiToken: string;
+  readonly sentryOrganizationSlug: string;
+  readonly opsgenieWebhookSecret: string;
+  readonly opsgenieApiKey: string;
+  readonly newrelicWebhookSecret: string;
+  readonly newrelicApiKey: string;
+  readonly newrelicAccountId: string;
 }

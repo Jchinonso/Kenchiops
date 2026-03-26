@@ -10,7 +10,7 @@
 
 import OpenAI from "openai";
 import { config } from "../../../core/config.js";
-import { OPENROUTER_DEFAULTS } from "../../../constants/index.js";
+import { LLM_DEFAULTS, OPENROUTER_DEFAULTS } from "../../../constants/index.js";
 
 // ==================== Provider Detection ====================
 
@@ -33,6 +33,22 @@ export const getEffectiveBaseUrl = (): string | undefined => {
   }
   return isOpenRouterProvider() ? OPENROUTER_DEFAULTS.BASE_URL : undefined;
 };
+
+// ==================== Model Resolution ====================
+
+/**
+ * Resolves the effective LLM model name using the config chain.
+ * Provider-agnostic — safe to call from service layer.
+ *
+ * Resolution order:
+ * 1. LLM_MODEL env var (explicit override)
+ * 2. OPENAI_MODEL env var (legacy compat)
+ * 3. Provider-specific default (OpenRouter vs standard)
+ */
+export const resolveLLMModel = (): string =>
+  config.LLM_MODEL ||
+  config.OPENAI_MODEL ||
+  (isOpenRouterProvider() ? OPENROUTER_DEFAULTS.MODEL : LLM_DEFAULTS.MODEL);
 
 // ==================== Client Instantiation ====================
 

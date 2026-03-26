@@ -146,10 +146,57 @@ export const config: Config = {
   // Vercel CI Provider
   VERCEL_WEBHOOK_SECRET: optionalString("VERCEL_WEBHOOK_SECRET", ""),
   VERCEL_API_TOKEN: optionalString("VERCEL_API_TOKEN", ""),
+  VERCEL_TEAM_ID: optionalString("VERCEL_TEAM_ID", ""),
 
   // Netlify CI Provider
   NETLIFY_WEBHOOK_SECRET: optionalString("NETLIFY_WEBHOOK_SECRET", ""),
   NETLIFY_API_TOKEN: optionalString("NETLIFY_API_TOKEN", ""),
+  NETLIFY_SITE_ID: optionalString("NETLIFY_SITE_ID", ""),
+
+  // Railway Deploy Provider
+  RAILWAY_WEBHOOK_SECRET: optionalString("RAILWAY_WEBHOOK_SECRET", ""),
+  RAILWAY_API_TOKEN: optionalString("RAILWAY_API_TOKEN", ""),
+
+  // Render Deploy Provider
+  RENDER_WEBHOOK_SECRET: optionalString("RENDER_WEBHOOK_SECRET", ""),
+  RENDER_API_KEY: optionalString("RENDER_API_KEY", ""),
+
+  // Sentry (incident triage)
+  SENTRY_WEBHOOK_SECRET: optionalString("SENTRY_WEBHOOK_SECRET", ""),
+  SENTRY_API_TOKEN: optionalString("SENTRY_API_TOKEN", ""),
+  SENTRY_ORGANIZATION_SLUG: optionalString("SENTRY_ORGANIZATION_SLUG", ""),
+
+  // PagerDuty (incident triage)
+  PAGERDUTY_WEBHOOK_SECRET: optionalString("PAGERDUTY_WEBHOOK_SECRET", ""),
+  PAGERDUTY_API_TOKEN: optionalString("PAGERDUTY_API_TOKEN", ""),
+
+  // OpsGenie (incident triage)
+  OPSGENIE_WEBHOOK_SECRET: optionalString("OPSGENIE_WEBHOOK_SECRET", ""),
+  OPSGENIE_API_KEY: optionalString("OPSGENIE_API_KEY", ""),
+
+  // New Relic (incident triage)
+  NEWRELIC_WEBHOOK_SECRET: optionalString("NEWRELIC_WEBHOOK_SECRET", ""),
+  NEWRELIC_API_KEY: optionalString("NEWRELIC_API_KEY", ""),
+  NEWRELIC_ACCOUNT_ID: optionalString("NEWRELIC_ACCOUNT_ID", ""),
+
+  // Datadog (incident triage)
+  DATADOG_WEBHOOK_SECRET: optionalString("DATADOG_WEBHOOK_SECRET", ""),
+  DATADOG_API_KEY: optionalString("DATADOG_API_KEY", ""),
+  DATADOG_APP_KEY: optionalString("DATADOG_APP_KEY", ""),
+  DATADOG_API_BASE_URL: optionalString("DATADOG_API_BASE_URL", "https://api.datadoghq.com"),
+
+  // Grafana (incident triage)
+  GRAFANA_WEBHOOK_SECRET: optionalString("GRAFANA_WEBHOOK_SECRET", ""),
+  GRAFANA_API_TOKEN: optionalString("GRAFANA_API_TOKEN", ""),
+  GRAFANA_API_BASE_URL: optionalString("GRAFANA_API_BASE_URL", ""),
+
+  // Prometheus (incident triage)
+  PROMETHEUS_WEBHOOK_SECRET: optionalString("PROMETHEUS_WEBHOOK_SECRET", ""),
+  PROMETHEUS_API_BASE_URL: optionalString("PROMETHEUS_API_BASE_URL", ""),
+
+  // Incident Triage Service
+  TRIAGE_LLM_MODEL: optionalString("TRIAGE_LLM_MODEL", ""),
+  SLACK_INCIDENT_WEBHOOK_URL: optionalString("SLACK_INCIDENT_WEBHOOK_URL", ""),
 
   // Database
   DATABASE_URL: requireEnv("DATABASE_URL"),

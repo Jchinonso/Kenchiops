@@ -11,8 +11,8 @@
 import {
   getLLMSDKClient,
   createLogger,
-  getErrorMessage,
   ExternalServiceError,
+  classifyHttpError,
   CHAT_DEFAULTS,
   type ChatLLMPort,
   type ChatLLMOptions,
@@ -87,25 +87,22 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
       });
     } catch (error: unknown) {
       const durationMs = Date.now() - startTime;
-      const errorMsg = getErrorMessage(error);
-
-      // Classify retryable vs non-retryable
-      const isTimeout = errorMsg.includes("timed out");
-      const retryable = isTimeout;
+      const classified = classifyHttpError(error);
 
       logger.error("Chat LLM stream failed", {
         provider: PROVIDER,
         operation: OPERATION,
         durationMs,
         model,
-        category: retryable ? "retryable" : "non_retryable",
-        retryable,
+        statusCode: classified.statusCode,
+        category: classified.category,
+        retryable: classified.retryable,
         ...context,
       });
 
-      throw new ExternalServiceError(PROVIDER, `Chat LLM streaming failed: ${errorMsg}`, {
-        metadata: { operation: OPERATION, model },
-        retryable,
+      throw new ExternalServiceError(PROVIDER, `Chat LLM streaming failed: ${classified.message}`, {
+        metadata: { operation: OPERATION, model, statusCode: classified.statusCode },
+        retryable: classified.retryable,
       });
     }
   },

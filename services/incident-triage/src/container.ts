@@ -36,6 +36,9 @@ import { createNetlifyAdapter } from "./adapters/netlifyAdapter.js";
 import { createDatadogAdapter } from "./adapters/datadogAdapter.js";
 import { createGrafanaAdapter } from "./adapters/grafanaAdapter.js";
 import { createPrometheusAdapter } from "./adapters/prometheusAdapter.js";
+import { createSentryAdapter } from "./adapters/sentryAlertAdapter.js";
+import { createOpsGenieAdapter } from "./adapters/opsgenieAlertAdapter.js";
+import { createNewRelicAdapter } from "./adapters/newRelicAlertAdapter.js";
 import { createInvestigationSearchAdapter } from "./adapters/investigationSearchAdapter.js";
 import { createInvestigationService } from "./services/investigationService.js";
 import { createDatadogMonitoringAdapter } from "./adapters/datadogMonitoringAdapter.js";
@@ -177,6 +180,9 @@ export const createTriageContainer = (): TriageContainer => {
     datadog: createDatadogAdapter(),
     grafana: createGrafanaAdapter(),
     prometheus: createPrometheusAdapter(),
+    sentry: createSentryAdapter(),
+    opsgenie: createOpsGenieAdapter(),
+    newrelic: createNewRelicAdapter(),
   } as const;
 
   return {

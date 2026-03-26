@@ -304,7 +304,7 @@ export const useCopilotChat = (): UseCopilotChatResult => {
     const fetchMessages = async (): Promise<void> => {
       try {
         const response = await fetch(
-          `${API_URL}${CHAT_GUARD_CONFIG.MESSAGES_PATH_PREFIX}/${id}/messages`,
+          `${API_URL}${CHAT_GUARD_CONFIG.MESSAGES_PATH_PREFIX}/${encodeURIComponent(id)}/messages`,
           {
             credentials: "include",
             headers: { "Content-Type": "application/json" },

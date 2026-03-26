@@ -1258,8 +1258,17 @@ describe("createChatService", () => {
   });
 
   describe("getMessages", () => {
-    it("should delegate to repository", async () => {
+    it("should delegate to repository after ownership check", async () => {
       const expected = [{ role: "user", content: "hi" }];
+      mockRepo.findConversationById.mockResolvedValue({
+        id: "c1",
+        tenantId: "test-tenant",
+        userId: "user-1",
+        title: "Test",
+        pageContext: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       mockRepo.getMessagesByConversation.mockResolvedValue(expected);
 
       const service = createChatService({
@@ -1267,8 +1276,42 @@ describe("createChatService", () => {
         llmPort: mockLLM,
       });
 
-      const result = await service.getMessages("c1", 50, testContext);
+      const result = await service.getMessages("c1", "test-tenant", "user-1", 50, testContext);
       expect(result).toBe(expected);
+    });
+
+    it("should throw NotFoundError when conversation does not exist", async () => {
+      mockRepo.findConversationById.mockResolvedValue(null);
+
+      const service = createChatService({
+        chatRepository: mockRepo,
+        llmPort: mockLLM,
+      });
+
+      await expect(
+        service.getMessages("c1", "test-tenant", "user-1", 50, testContext)
+      ).rejects.toThrow("Conversation not found");
+    });
+
+    it("should throw AuthorizationError when user does not own conversation", async () => {
+      mockRepo.findConversationById.mockResolvedValue({
+        id: "c1",
+        tenantId: "test-tenant",
+        userId: "other-user",
+        title: "Test",
+        pageContext: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const service = createChatService({
+        chatRepository: mockRepo,
+        llmPort: mockLLM,
+      });
+
+      await expect(
+        service.getMessages("c1", "test-tenant", "user-1", 50, testContext)
+      ).rejects.toThrow("You do not have access to this conversation");
     });
   });
 

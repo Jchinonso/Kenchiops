@@ -265,6 +265,14 @@ export const CHAT_DEFAULTS = {
   MAX_CONVERSATIONS_PER_USER: 20,
   /** Minimum milliseconds between chat messages (frontend enforcement) */
   MIN_MESSAGE_COOLDOWN_MS: 2_000,
+  /** Maximum keys allowed in pageContext.metadata */
+  MAX_METADATA_KEYS: 20,
+  /** Maximum character length for a single metadata string value */
+  MAX_METADATA_VALUE_LENGTH: 500,
+  /** Maximum character length for pageContext.entityId */
+  MAX_ENTITY_ID_LENGTH: 100,
+  /** Maximum tokens allowed in a single budget increment — prevents integer overflow */
+  MAX_TOKENS_PER_INCREMENT: 1_000_000,
 } as const;
 
 /**

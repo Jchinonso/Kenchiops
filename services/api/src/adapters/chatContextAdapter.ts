@@ -23,6 +23,7 @@ import {
 } from "@kenchi/shared";
 
 const PROVIDER = "database" as const;
+const logger = createLogger("chat-context-adapter");
 
 /**
  * Formats RAG knowledge doc results into a prompt section and source citations.
@@ -76,11 +77,10 @@ export const createChatContextAdapter = (): ChatContextPort => ({
     tenantId: string,
     context: RequestContext
   ): Promise<ChatContextData | null> => {
-    const logger = createLogger("chat-context-adapter");
     const startTime = Date.now();
 
     try {
-      const analysis = await getAnalysisById(entityId, tenantId);
+      const analysis = await getAnalysisById(entityId, tenantId, context);
       const durationMs = Date.now() - startTime;
 
       if (!analysis) {
@@ -142,11 +142,10 @@ export const createChatContextAdapter = (): ChatContextPort => ({
     tenantId: string,
     context: RequestContext
   ): Promise<ChatContextData | null> => {
-    const logger = createLogger("chat-context-adapter");
     const startTime = Date.now();
 
     try {
-      const alert = await getAlertById(entityId, tenantId);
+      const alert = await getAlertById(entityId, tenantId, context);
       const durationMs = Date.now() - startTime;
 
       if (!alert) {
@@ -206,7 +205,6 @@ export const createChatContextAdapter = (): ChatContextPort => ({
     tenantId: string,
     context: RequestContext
   ): Promise<ChatRAGResult> => {
-    const logger = createLogger("chat-context-adapter");
     const startTime = Date.now();
 
     try {

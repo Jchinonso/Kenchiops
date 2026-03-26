@@ -39,9 +39,6 @@ export const prepareCompletion = async (
   input: ChatCompletionInput,
   context: RequestContext
 ): Promise<PrepareCompletionResult> => {
-  // Mutable array: O(1) append required for streaming hot path; immutable rebuild would be O(n²)
-  const preStreamChunks: ChatStreamChunk[] = [];
-
   // Step 1: Budget guard — checked BEFORE conversation creation to avoid orphaned records
   const budgetResult = await checkBudgetGuard(budgetPort, input.tenantId, input.planTier, context);
   if (budgetResult.exhausted) {
@@ -53,15 +50,6 @@ export const prepareCompletion = async (
   if (!conversationResult.ok) {
     return { ok: false, error: conversationResult.error };
   }
-  if (conversationResult.isNew) {
-    preStreamChunks.push({
-      type: "conversation_created",
-      conversationId: conversationResult.conversationId,
-    });
-  }
-  if (budgetResult.warning) {
-    preStreamChunks.push(budgetResult.warning);
-  }
 
   const { conversationId } = conversationResult;
 
@@ -69,6 +57,7 @@ export const prepareCompletion = async (
   const historyResult = await loadHistoryAndSaveUserMessage(
     chatRepository,
     conversationId,
+    input.tenantId,
     input.userMessage,
     context
   );
@@ -84,9 +73,17 @@ export const prepareCompletion = async (
     historyResult.history,
     context
   );
-  if (pipeline.ragSources.length > 0) {
-    preStreamChunks.push({ type: "rag_sources", sources: pipeline.ragSources });
-  }
+
+  // Build pre-stream chunks immutably (at most 3 elements)
+  const preStreamChunks: ReadonlyArray<ChatStreamChunk> = [
+    ...(conversationResult.isNew
+      ? [{ type: "conversation_created" as const, conversationId }]
+      : []),
+    ...(budgetResult.warning ? [budgetResult.warning] : []),
+    ...(pipeline.ragSources.length > 0
+      ? [{ type: "rag_sources" as const, sources: pipeline.ragSources }]
+      : []),
+  ];
 
   return {
     ok: true,

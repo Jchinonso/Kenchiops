@@ -15,6 +15,9 @@ import { githubOutputAdapter } from "./githubOutputAdapter.js";
 import { gitlabWebhookAdapter } from "./gitlabWebhookAdapter.js";
 import { createGitLabLogFetcherAdapter } from "./gitlabLogFetcherAdapter.js";
 import { createGitLabOutputAdapter } from "./gitlabOutputAdapter.js";
+import { circleciWebhookAdapter } from "./circleciWebhookAdapter.js";
+import { createCircleCILogFetcherAdapter } from "./circleciLogFetcherAdapter.js";
+import { createCircleCIOutputAdapter } from "./circleciOutputAdapter.js";
 
 // ==================== Registry ====================
 
@@ -28,6 +31,11 @@ const ADAPTERS: Readonly<Partial<Record<CIProvider, CIProviderAdapters>>> = {
     webhook: gitlabWebhookAdapter,
     logFetcher: createGitLabLogFetcherAdapter(),
     output: createGitLabOutputAdapter(),
+  },
+  circleci: {
+    webhook: circleciWebhookAdapter,
+    logFetcher: createCircleCILogFetcherAdapter(),
+    output: createCircleCIOutputAdapter(),
   },
 };
 

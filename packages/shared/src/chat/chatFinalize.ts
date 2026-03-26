@@ -24,6 +24,7 @@ export const finalizeCompletion = async (
   const assistantTokenCount = await persistAssistantMessage(
     input.chatRepository,
     input.conversationId,
+    input.tenantId,
     input.content,
     input.ragContextUsed,
     context

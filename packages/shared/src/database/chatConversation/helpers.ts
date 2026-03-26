@@ -69,6 +69,7 @@ export const validateCreateConversationInput = (input: CreateConversationInput):
  */
 export const validateCreateMessageInput = (input: CreateMessageInput): void => {
   validateNonEmptyString(input.conversationId, "conversationId");
+  validateNonEmptyString(input.tenantId, "tenantId");
   validateNonEmptyString(input.content, "content");
 
   if (!VALID_ROLES.has(input.role)) {

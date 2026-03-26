@@ -222,7 +222,7 @@ export const createMessage = async (
   const result = await query<ChatMessageRow>(
     `WITH updated_conversation AS (
       UPDATE chat_conversations SET updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $2 AND tenant_id = $7
     )
     INSERT INTO chat_messages (id, conversation_id, role, content, token_count, rag_context_used)
     VALUES ($1, $2, $3, $4, $5, $6)
@@ -234,6 +234,7 @@ export const createMessage = async (
       input.content,
       input.tokenCount ?? null,
       input.ragContextUsed ?? false,
+      input.tenantId,
     ]
   );
 

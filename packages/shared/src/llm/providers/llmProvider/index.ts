@@ -11,6 +11,7 @@
 export {
   isOpenRouterProvider,
   getEffectiveBaseUrl,
+  resolveLLMModel,
   createLLMSDKClient,
   getLLMSDKClient,
   resetLLMSDKClient,

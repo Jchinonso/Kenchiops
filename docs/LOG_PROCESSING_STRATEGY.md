@@ -100,17 +100,17 @@ Raw Log (up to 10MB)
 
 ### Key Parameters
 
-| Parameter                | Value         | Purpose                             |
-| ------------------------ | ------------- | ----------------------------------- |
-| `TARGET_TOKENS`          | 3,000         | Optimal chunk size for extraction   |
-| `MAX_TOKENS`             | 4,000         | Hard maximum per chunk              |
-| `OVERLAP_LINES`          | 40            | Context preservation between chunks |
-| `MAX_CHUNKS`             | 100           | Runaway protection                  |
-| `SMALL_LOG_THRESHOLD`    | 30,000 tokens | Skip chunking for small logs        |
-| `EXTRACTION_CONCURRENCY` | 15            | Parallel LLM calls                  |
-| `EXTRACTION_TIMEOUT_MS`  | 60,000        | Per-chunk timeout                   |
-| `MAX_FINAL_ARTIFACTS`    | 50            | Cap artifacts sent to Stage 4       |
-| `MAX_PROMPT_TOKENS`      | 40,000        | LLM input ceiling                   |
+| Parameter                | Value                            | Purpose                                                           |
+| ------------------------ | -------------------------------- | ----------------------------------------------------------------- |
+| `TARGET_TOKENS`          | 3,000                            | Optimal chunk size for extraction                                 |
+| `MAX_TOKENS`             | 4,000                            | Hard maximum per chunk                                            |
+| `OVERLAP_LINES`          | 40                               | Context preservation between chunks                               |
+| `MAX_CHUNKS`             | 100                              | Runaway protection                                                |
+| `SMALL_LOG_THRESHOLD`    | 30,000 tokens                    | Skip chunking for small logs                                      |
+| `EXTRACTION_CONCURRENCY` | 15                               | Parallel LLM calls                                                |
+| `EXTRACTION_TIMEOUT_MS`  | 10,000 (request) / 60,000 (hard) | Per-request timeout via resilientPost + 60s Promise.race hard cap |
+| `MAX_FINAL_ARTIFACTS`    | 50                               | Cap artifacts sent to Stage 4                                     |
+| `MAX_PROMPT_TOKENS`      | 40,000                           | LLM input ceiling                                                 |
 
 ### Extending to New Providers
 
@@ -118,7 +118,7 @@ Each deployment platform needs an adapter that normalizes logs into the existing
 
 ```
 DeployLogInput {
-  source: "vercel" | "railway" | "render" | "netlify" | "github_actions"
+  source: "vercel" | "railway" | "render" | "netlify"  // GitHub Actions uses a separate CI pipeline, not this port
   deployId: string
   rawLog: string              // The log text to analyze
   metadata: {
@@ -408,12 +408,12 @@ IncidentSummary {
 
 ### Flush Triggers (Configurable Per Source)
 
-| Source               | Time Window | Volume Threshold | Event Trigger          |
-| -------------------- | ----------- | ---------------- | ---------------------- |
-| Railway (runtime)    | 5 min       | 10K tokens       | Deploy status change   |
-| Vercel (log drain)   | 3 min       | 8K tokens        | Deploy completion      |
-| PagerDuty (incident) | 5 min       | 5K tokens        | Escalation, resolution |
-| Render (runtime)     | 5 min       | 10K tokens       | Deploy status change   |
+| Source              | Time Window | Volume Threshold | Event Trigger        |
+| ------------------- | ----------- | ---------------- | -------------------- |
+| Railway (runtime)   | 5 min       | 10K tokens       | Deploy status change |
+| Vercel (log drain)  | 3 min       | 8K tokens        | Deploy completion    |
+| Render (runtime)    | 5 min       | 10K tokens       | Deploy status change |
+| Netlify (log drain) | 3 min       | 8K tokens        | Deploy completion    |
 
 ### Buffer Management
 
@@ -545,15 +545,21 @@ This context is appended to the LLM prompt within the token budget (8K tokens al
 All adapters implement the same port interface, regardless of data access pattern:
 
 ```
-LogSourceAdapter {
-  // For event-driven sources
-  handleWebhook(payload, context): Promise<IngestResult>
+DeployLogSourcePort {
+  // Verify webhook signature (HMAC) before processing
+  verifySignature(rawBody, signature, secret): boolean
 
-  // For pull-based sources (polling or on-demand fetch)
-  fetchLogs(entityId, timeRange, context): Promise<RawLogData>
+  // Parse webhook payload into normalized deploy event
+  handleWebhook(payload, context): Promise<DeployWebhookResult | null>
 
-  // For subscription-based sources (websockets, SSE)
-  subscribe(entityId, onData, context): Promise<Subscription>
+  // Fetch logs for a completed deploy via provider REST API
+  fetchDeployLogs(params, context): Promise<DeployLogData>
+
+  // Parse incoming log drain batch (NDJSON) into normalized lines
+  parseLogDrainBatch(payload, context): Promise<LogDrainBatchResult>
+
+  // Optional: subscribe to real-time log streaming (WebSocket/SSE)
+  subscribe?(entityId, onLine, context): Promise<{ close(): Promise<void> }>
 }
 ```
 
@@ -686,27 +692,47 @@ DegradedResult {
 
 ---
 
-## Implementation Priority
+## Implementation Status
 
-### Phase 1: Extend Pipeline A (deployment platforms)
+### Phase 1: Extend Pipeline A (deployment platforms) — COMPLETE
 
-1. Vercel adapter (Log Drains + REST fallback)
-2. Railway adapter (GraphQL subscription + REST)
-3. Render adapter (REST polling + webhooks)
-4. Windowed ingestion buffer (Redis-backed)
-5. Incremental summarization for continuous logs
+| Item                                          | Status | Location                                                                       |
+| --------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| Vercel adapter (Log Drains + REST)            | Done   | `services/api/src/adapters/vercelLogAdapter.ts`                                |
+| Railway adapter (GraphQL subscription + REST) | Done   | `services/api/src/adapters/railwayLogAdapter.ts`, `railwayStreamingAdapter.ts` |
+| Render adapter (REST polling + webhooks)      | Done   | `services/api/src/adapters/renderLogAdapter.ts`                                |
+| Netlify adapter (Log Drains + REST)           | Done   | `services/api/src/adapters/netlifyLogAdapter.ts`                               |
+| DeployLogSourcePort interface                 | Done   | `packages/shared/src/ports/deployLogSourcePort.ts`                             |
+| Windowed ingestion buffer (Redis-backed)      | Done   | `packages/shared/src/ingestion/`                                               |
+| Incremental summarization                     | Done   | `services/api/src/services/windowedAnalysis.ts`                                |
+| Flush trigger worker                          | Done   | `services/api/src/workers/flushTriggerWorker.ts`                               |
+| Deploy webhook routes                         | Done   | `services/api/src/routes/deployWebhookRoutes.ts`                               |
+| Deploy webhook signature verification         | Done   | `services/api/src/middleware/verifyDeployWebhook.ts`                           |
+| Composition root                              | Done   | `services/api/src/container/deployContainer.ts`                                |
 
-### Phase 2: Build Pipeline B (observability tools)
+### Phase 2: Build Pipeline B (observability tools) — COMPLETE
 
-1. AlertContext type definitions and port interface
-2. Sentry adapter (highest signal-to-noise ratio)
-3. Datadog adapter (most comprehensive context)
-4. PagerDuty adapter (incident lifecycle)
-5. Prometheus/AlertManager adapter
+| Item                                          | Status | Location                                                               |
+| --------------------------------------------- | ------ | ---------------------------------------------------------------------- |
+| AlertContext type definitions                 | Done   | `packages/shared/src/alertContext/types.ts`                            |
+| Alert context truncation cascade              | Done   | `packages/shared/src/alertContext/truncation.ts`                       |
+| Alert budget quota (per-tenant limits)        | Done   | `packages/shared/src/queue/alertBudgetQuota.ts`                        |
+| Diagnostics framework (taxonomy, correlation) | Done   | `packages/shared/src/diagnostics/`                                     |
+| Sentry adapter (alert + context)              | Done   | `services/incident-triage/src/adapters/sentry*.ts`                     |
+| PagerDuty adapter                             | Done   | `services/incident-triage/src/adapters/pagerDuty*.ts`                  |
+| OpsGenie adapter (alert + context)            | Done   | `services/incident-triage/src/adapters/opsgenie*.ts`                   |
+| New Relic adapter (alert + context)           | Done   | `services/incident-triage/src/adapters/newRelic*.ts`                   |
+| Datadog monitoring adapter                    | Done   | `services/incident-triage/src/adapters/datadogMonitoringAdapter.ts`    |
+| Grafana monitoring adapter                    | Done   | `services/incident-triage/src/adapters/grafanaMonitoringAdapter.ts`    |
+| Prometheus monitoring adapter                 | Done   | `services/incident-triage/src/adapters/prometheusMonitoringAdapter.ts` |
+| Alert analysis service                        | Done   | `services/incident-triage/src/services/alertAnalysisService.ts`        |
+| Webhook routes (all providers)                | Done   | `services/incident-triage/src/routes/webhookRoutes.ts`                 |
+| Webhook verification middleware               | Done   | `services/incident-triage/src/middleware/verify*.ts`                   |
+| CircleCI integration (CI pipeline)            | Done   | `services/github-app/src/adapters/circleci*.ts`                        |
 
-### Phase 3: Advanced capabilities
+### Phase 3: Advanced capabilities — PLANNED
 
-1. Cross-pipeline correlation (deploy failure + alert spike = linked incident)
+1. Cross-pipeline correlation (deploy failure + alert spike = linked incident) — types defined in `packages/shared/src/diagnostics/types.ts`, correlation logic in `correlation.ts`
 2. Multi-hop RAG for related past incidents
 3. Automated runbook execution suggestions
 4. Cost optimization: skip LLM for known-signature errors (pattern match only)
