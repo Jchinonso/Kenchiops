@@ -660,6 +660,7 @@ export {
   type CreateMessageInput,
   type TokenCountRow,
   type DeletedCountRow,
+  type ConversationCountRow,
   // Helpers
   mapRowToConversation,
   mapRowToMessage,
@@ -675,4 +676,16 @@ export {
   getMessagesByConversation,
   getConversationTokenCount,
   deleteOldestMessages,
+  countConversationsByUser,
+  countMessagesByConversation,
 } from "./chatConversation/index.js";
+
+// Chat token usage module (Budget enforcement)
+export {
+  // Types
+  type ChatTokenUsageRow,
+  type ChatTokenUsage,
+  // Repository operations
+  getTodayTokenUsage,
+  incrementTokenUsage,
+} from "./chatTokenUsage/index.js";

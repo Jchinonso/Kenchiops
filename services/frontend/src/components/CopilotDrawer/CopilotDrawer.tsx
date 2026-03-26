@@ -6,7 +6,7 @@
  * Supports switching between active chat and conversation history views.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -15,7 +15,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Trash2, History, MessageSquare } from "lucide-react";
+import { Sparkles, Trash2, History, MessageSquare, AlertTriangle, X } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useCopilotChat } from "@/hooks/useCopilotChat";
 import { MessageList } from "./MessageList";
@@ -35,12 +35,29 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
     conversationId,
     error,
     ragSources,
+    budgetWarning,
+    isCooldown,
     sendMessage,
     clearConversation,
     loadConversation,
   } = useCopilotChat();
 
   const [showHistory, setShowHistory] = useState(false);
+  const [budgetDismissed, setBudgetDismissed] = useState(false);
+
+  const showBudgetWarning = budgetWarning !== null && !budgetDismissed;
+
+  const budgetWarningText = useMemo(() => {
+    if (!budgetWarning) {
+      return "";
+    }
+    const pct = Math.round(budgetWarning.ratioUsed * 100);
+    return `You have used ${pct}% of your daily chat budget. ${budgetWarning.remaining} tokens remaining.`;
+  }, [budgetWarning]);
+
+  const dismissBudgetWarning = useCallback((): void => {
+    setBudgetDismissed(true);
+  }, []);
 
   const { length: messageCount } = messages;
   const hasMessages = messageCount > 0;
@@ -143,8 +160,24 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
             {/* RAG Sources */}
             <RAGSourceList sources={ragSources} />
 
+            {/* Budget warning banner */}
+            {showBudgetWarning && (
+              <div className="flex items-center gap-2 border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-400">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span className="flex-1">{budgetWarningText}</span>
+                <button
+                  type="button"
+                  onClick={dismissBudgetWarning}
+                  className="shrink-0 rounded p-0.5 hover:bg-amber-500/20"
+                  aria-label="Dismiss budget warning"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )}
+
             {/* Input */}
-            <ChatInput onSend={sendMessage} disabled={isStreaming} />
+            <ChatInput onSend={sendMessage} disabled={isStreaming || isCooldown} />
           </>
         )}
       </SheetContent>

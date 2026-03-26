@@ -17,6 +17,7 @@ export interface ChatCompletionInput {
   readonly pageContext: ChatPageContext;
   readonly tenantId: string;
   readonly userId: string;
+  readonly planTier?: string;
 }
 
 /**
@@ -37,7 +38,8 @@ export type ChatStreamChunkType =
   | "done"
   | "error"
   | "rag_sources"
-  | "conversation_created";
+  | "conversation_created"
+  | "budget_warning";
 
 /**
  * A single chunk in a streamed chat response.
@@ -48,7 +50,8 @@ export type ChatStreamChunk =
   | { readonly type: "done" }
   | { readonly type: "error"; readonly error: string }
   | { readonly type: "conversation_created"; readonly conversationId: string }
-  | { readonly type: "rag_sources"; readonly sources: ReadonlyArray<ChatRAGSource> };
+  | { readonly type: "rag_sources"; readonly sources: ReadonlyArray<ChatRAGSource> }
+  | { readonly type: "budget_warning"; readonly ratioUsed: number; readonly remaining: number };
 
 /**
  * A RAG source document surfaced during chat.
@@ -70,6 +73,11 @@ export interface ChatLLMStreamDelta {
   readonly finishReason?: string | null;
 }
 
+/** Optional parameters for LLM chat completion. */
+export interface ChatLLMOptions {
+  readonly maxTokens?: number;
+}
+
 /**
  * Port interface for streaming LLM completions.
  * The chat service depends on this abstraction, not on vendor SDKs.
@@ -79,7 +87,8 @@ export interface ChatLLMPort {
   readonly createStreamingCompletion: (
     messages: ReadonlyArray<ChatLLMMessage>,
     model: string,
-    context: import("../core/types.js").RequestContext
+    context: import("../core/types.js").RequestContext,
+    options?: ChatLLMOptions
   ) => AsyncIterable<ChatLLMStreamDelta>;
 }
 
@@ -170,10 +179,22 @@ export interface ChatRepositoryPort {
     title: string,
     context: import("../core/types.js").RequestContext
   ) => Promise<ChatConversationSummary | null>;
-  readonly getConversationTokenCount: (conversationId: string) => Promise<number>;
+  readonly getConversationTokenCount: (
+    conversationId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<number>;
   readonly deleteOldestMessages: (
     conversationId: string,
     count: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<number>;
+  readonly countConversationsByUser: (
+    tenantId: string,
+    userId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<number>;
+  readonly countMessagesByConversation: (
+    conversationId: string,
     context: import("../core/types.js").RequestContext
   ) => Promise<number>;
 }
@@ -200,8 +221,159 @@ export interface CreateConversationPortInput {
 /** Input for creating a message via the port. */
 export interface CreateMessagePortInput {
   readonly conversationId: string;
+  readonly tenantId: string;
   readonly role: "user" | "assistant" | "system";
   readonly content: string;
   readonly tokenCount?: number;
   readonly ragContextUsed?: boolean;
+}
+
+// ==================== Service Dependencies ====================
+
+/** Dependencies injected into the chat service factory. */
+export interface ChatServiceDeps {
+  readonly chatRepository: ChatRepositoryPort;
+  readonly llmPort: ChatLLMPort;
+  readonly contextPort?: ChatContextPort;
+  readonly budgetPort?: ChatBudgetPort;
+}
+
+// ==================== Chat Service ====================
+
+/** Shape of the chat service returned by createChatService. */
+export interface ChatService {
+  readonly streamCompletion: (
+    input: ChatCompletionInput,
+    context: import("../core/types.js").RequestContext
+  ) => AsyncGenerator<ChatStreamChunk>;
+  readonly listConversations: (
+    tenantId: string,
+    userId: string,
+    limit: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<readonly ChatConversationSummary[]>;
+  readonly getConversation: (
+    conversationId: string,
+    tenantId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<ChatConversationSummary | null>;
+  readonly getMessages: (
+    conversationId: string,
+    tenantId: string,
+    userId: string,
+    limit: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<ReadonlyArray<{ readonly role: string; readonly content: string }>>;
+  readonly deleteConversation: (
+    conversationId: string,
+    tenantId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<boolean>;
+  readonly updateConversationTitle: (
+    conversationId: string,
+    tenantId: string,
+    title: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<ChatConversationSummary | null>;
+}
+
+// ==================== Internal Pipeline Types ====================
+
+/** Resolved completion pipeline — messages, sources, and metadata for LLM streaming. */
+export interface CompletionPipeline {
+  readonly messages: ReadonlyArray<ChatLLMMessage>;
+  readonly ragSources: ReadonlyArray<ChatRAGSource>;
+  readonly ragContextUsed: boolean;
+  readonly logMetadata: Readonly<Record<string, unknown>>;
+}
+
+/** Result of ensuring a conversation exists. */
+export type EnsureConversationResult =
+  | { readonly ok: true; readonly conversationId: string; readonly isNew: boolean }
+  | { readonly ok: false; readonly error: string };
+
+/** Result of the budget guard check (fail-open). */
+export interface BudgetGuardResult {
+  readonly exhausted: boolean;
+  readonly exhaustionMessage?: string;
+  readonly warning?: ChatStreamChunk;
+}
+
+/** Result of loading and validating conversation history. */
+export type LoadHistoryResult =
+  | {
+      readonly ok: true;
+      readonly history: ReadonlyArray<{ readonly role: string; readonly content: string }>;
+      readonly userTokenCount: number;
+    }
+  | { readonly ok: false; readonly error: string };
+
+/** Collected result after streaming LLM tokens. */
+export interface StreamResult {
+  readonly content: string;
+  readonly durationMs: number;
+}
+
+/** Everything needed before LLM streaming begins. */
+export interface PreparedCompletion {
+  readonly conversationId: string;
+  readonly pipeline: CompletionPipeline;
+  readonly userTokenCount: number;
+  readonly preStreamChunks: ReadonlyArray<ChatStreamChunk>;
+}
+
+/** Result of preparing a completion — success with state, or failure with error. */
+export type PrepareCompletionResult =
+  | { readonly ok: true; readonly state: PreparedCompletion }
+  | { readonly ok: false; readonly error: string };
+
+/** Input for finalizing a chat completion after streaming. */
+export interface FinalizeCompletionInput {
+  readonly chatRepository: ChatRepositoryPort;
+  readonly budgetPort: ChatBudgetPort | undefined;
+  readonly conversationId: string;
+  readonly tenantId: string;
+  readonly planTier: string | undefined;
+  readonly content: string;
+  readonly ragContextUsed: boolean;
+  readonly userTokenCount: number;
+}
+
+// ==================== Budget Types ====================
+
+/** Port interface for chat token usage repository operations. */
+export interface ChatTokenUsageRepositoryPort {
+  readonly getTodayTokenUsage: (
+    tenantId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<{ readonly tokensUsed: number; readonly budgetLimit: number | null } | null>;
+  readonly incrementTokenUsage: (
+    tenantId: string,
+    tokensConsumed: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<void>;
+}
+
+/** Current chat token budget status for a tenant. */
+export interface ChatBudgetStatus {
+  readonly tokensUsed: number;
+  readonly budgetLimit: number;
+  readonly remaining: number;
+  readonly ratioUsed: number;
+  readonly isWarning: boolean;
+  readonly isExhausted: boolean;
+}
+
+/** Port interface for chat token budget checking and tracking. */
+export interface ChatBudgetPort {
+  readonly checkBudget: (
+    tenantId: string,
+    planTier: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<ChatBudgetStatus>;
+  readonly incrementUsage: (
+    tenantId: string,
+    tokensConsumed: number,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<void>;
 }

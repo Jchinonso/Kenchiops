@@ -59,6 +59,7 @@ import { SSE_STREAM_PATH } from "./routes/sseRoutes.js";
 import { setupSwagger } from "./swagger/index.js";
 import { appConfig } from "./config/appConfig.js";
 import { startAnalysisWorker, type AnalysisWorkerControl } from "./workers/analysisWorker.js";
+import { createDeployContainer, type DeployContainer } from "./container/deployContainer.js";
 
 // Augment Express Request with rawBody for HMAC signature verification
 declare module "express-serve-static-core" {
@@ -69,6 +70,7 @@ declare module "express-serve-static-core" {
 
 // let: module-level lifecycle state — assigned during init, read during shutdown
 let analysisWorker: AnalysisWorkerControl | null = null;
+let deployContainer: DeployContainer | null = null; // let: assigned during init, stopped during shutdown
 
 const logger = createLogger(SERVICE_NAMES.API);
 
@@ -549,7 +551,14 @@ const createApp = (): express.Express => {
       verify: (req: express.Request, _res, buf) => {
         // Only capture rawBody when signature verification headers are present
         // to avoid doubling memory usage on every request
-        if (req.headers["x-kenchi-signature"] || req.headers["stripe-signature"]) {
+        if (
+          req.headers["x-kenchi-signature"] ||
+          req.headers["stripe-signature"] ||
+          req.headers["x-vercel-signature"] ||
+          req.headers["x-railway-signature"] ||
+          req.headers["x-render-signature"] ||
+          req.headers["x-webhook-signature"]
+        ) {
           Object.assign(req, { rawBody: buf });
         }
       },
@@ -574,8 +583,11 @@ const createApp = (): express.Express => {
     res.end(metrics);
   });
 
-  // Register all routes
-  registerRoutes(app);
+  // Initialize deploy analysis subsystem
+  deployContainer = createDeployContainer();
+
+  // Register all routes (pass deploy container for webhook routes)
+  registerRoutes(app, deployContainer);
 
   // Error handling middleware (must be last)
   app.use(errorHandler);
@@ -686,6 +698,9 @@ const startServer = async (): Promise<void> => {
   registerCleanupHandler(() => {
     if (analysisWorker) {
       analysisWorker.stop();
+    }
+    if (deployContainer) {
+      deployContainer.flushWorker.stop();
     }
   });
 

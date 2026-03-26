@@ -14,6 +14,9 @@ export type AlertSource =
   | "grafana"
   | "vercel"
   | "netlify"
+  | "sentry"
+  | "opsgenie"
+  | "newrelic"
   | "custom";
 
 export type AlertSeverity = "critical" | "high" | "medium" | "low" | "info";

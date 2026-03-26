@@ -918,10 +918,57 @@ export interface Config {
   // Vercel CI Provider Configuration
   readonly VERCEL_WEBHOOK_SECRET?: string;
   readonly VERCEL_API_TOKEN?: string;
+  readonly VERCEL_TEAM_ID?: string;
 
   // Netlify CI Provider Configuration
   readonly NETLIFY_WEBHOOK_SECRET?: string;
   readonly NETLIFY_API_TOKEN?: string;
+  readonly NETLIFY_SITE_ID?: string;
+
+  // Railway Deploy Provider Configuration
+  readonly RAILWAY_WEBHOOK_SECRET?: string;
+  readonly RAILWAY_API_TOKEN?: string;
+
+  // Render Deploy Provider Configuration
+  readonly RENDER_WEBHOOK_SECRET?: string;
+  readonly RENDER_API_KEY?: string;
+
+  // Sentry Configuration (incident triage)
+  readonly SENTRY_WEBHOOK_SECRET?: string;
+  readonly SENTRY_API_TOKEN?: string;
+  readonly SENTRY_ORGANIZATION_SLUG?: string;
+
+  // PagerDuty Configuration (incident triage)
+  readonly PAGERDUTY_WEBHOOK_SECRET?: string;
+  readonly PAGERDUTY_API_TOKEN?: string;
+
+  // OpsGenie Configuration (incident triage)
+  readonly OPSGENIE_WEBHOOK_SECRET?: string;
+  readonly OPSGENIE_API_KEY?: string;
+
+  // New Relic Configuration (incident triage)
+  readonly NEWRELIC_WEBHOOK_SECRET?: string;
+  readonly NEWRELIC_API_KEY?: string;
+  readonly NEWRELIC_ACCOUNT_ID?: string;
+
+  // Datadog Configuration (incident triage)
+  readonly DATADOG_WEBHOOK_SECRET?: string;
+  readonly DATADOG_API_KEY?: string;
+  readonly DATADOG_APP_KEY?: string;
+  readonly DATADOG_API_BASE_URL?: string;
+
+  // Grafana Configuration (incident triage)
+  readonly GRAFANA_WEBHOOK_SECRET?: string;
+  readonly GRAFANA_API_TOKEN?: string;
+  readonly GRAFANA_API_BASE_URL?: string;
+
+  // Prometheus Configuration (incident triage)
+  readonly PROMETHEUS_WEBHOOK_SECRET?: string;
+  readonly PROMETHEUS_API_BASE_URL?: string;
+
+  // Incident Triage Service Configuration
+  readonly TRIAGE_LLM_MODEL?: string;
+  readonly SLACK_INCIDENT_WEBHOOK_URL?: string;
 
   // Database Configuration
   readonly DATABASE_URL: string;

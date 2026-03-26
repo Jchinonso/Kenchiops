@@ -11,9 +11,11 @@
 import {
   getLLMSDKClient,
   createLogger,
-  getErrorMessage,
   ExternalServiceError,
+  classifyHttpError,
+  CHAT_DEFAULTS,
   type ChatLLMPort,
+  type ChatLLMOptions,
   type ChatLLMStreamDelta,
   type ChatLLMMessage,
   type RequestContext,
@@ -33,7 +35,8 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
   async *createStreamingCompletion(
     messages: readonly ChatLLMMessage[],
     model: string,
-    context: RequestContext
+    context: RequestContext,
+    options?: ChatLLMOptions
   ): AsyncGenerator<ChatLLMStreamDelta> {
     const logger = createLogger("chat-llm-adapter");
     const startTime = Date.now();
@@ -45,6 +48,7 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
         model,
         messages: messages.map(({ role, content }) => ({ role, content })),
         stream: true,
+        max_tokens: options?.maxTokens ?? CHAT_DEFAULTS.MAX_RESPONSE_TOKENS,
       });
 
       // Hard timeout on initial connection via Promise.race
@@ -83,25 +87,22 @@ export const createChatLLMAdapter = (): ChatLLMPort => ({
       });
     } catch (error: unknown) {
       const durationMs = Date.now() - startTime;
-      const errorMsg = getErrorMessage(error);
-
-      // Classify retryable vs non-retryable
-      const isTimeout = errorMsg.includes("timed out");
-      const retryable = isTimeout;
+      const classified = classifyHttpError(error);
 
       logger.error("Chat LLM stream failed", {
         provider: PROVIDER,
         operation: OPERATION,
         durationMs,
         model,
-        category: retryable ? "retryable" : "non_retryable",
-        retryable,
+        statusCode: classified.statusCode,
+        category: classified.category,
+        retryable: classified.retryable,
         ...context,
       });
 
-      throw new ExternalServiceError(PROVIDER, `Chat LLM streaming failed: ${errorMsg}`, {
-        metadata: { operation: OPERATION, model },
-        retryable,
+      throw new ExternalServiceError(PROVIDER, `Chat LLM streaming failed: ${classified.message}`, {
+        metadata: { operation: OPERATION, model, statusCode: classified.statusCode },
+        retryable: classified.retryable,
       });
     }
   },

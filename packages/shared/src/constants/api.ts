@@ -249,7 +249,45 @@ export const CHAT_DEFAULTS = {
   MAX_RAG_DOC_CONTENT: 500,
   /** Similarity percentage multiplier for display formatting */
   RAG_PERCENTAGE_MULTIPLIER: 100,
+  /** Maximum output tokens for a single chat LLM response */
+  MAX_RESPONSE_TOKENS: 2_048,
+  /** Maximum chat messages per user per minute */
+  MAX_MESSAGES_PER_MINUTE: 6,
+  /** Maximum chat messages per user per hour */
+  MAX_MESSAGES_PER_HOUR: 60,
+  /** Maximum chat messages per user per day */
+  MAX_MESSAGES_PER_DAY: 300,
+  /** Redis key prefix for per-user chat rate limiting */
+  CHAT_USER_RATE_LIMIT_PREFIX: "rl:chat:user:",
+  /** Maximum messages allowed in a single conversation before requiring a new one */
+  MAX_MESSAGES_PER_CONVERSATION: 50,
+  /** Maximum active conversations per user */
+  MAX_CONVERSATIONS_PER_USER: 20,
+  /** Minimum milliseconds between chat messages (frontend enforcement) */
+  MIN_MESSAGE_COOLDOWN_MS: 2_000,
+  /** Maximum keys allowed in pageContext.metadata */
+  MAX_METADATA_KEYS: 20,
+  /** Maximum character length for a single metadata string value */
+  MAX_METADATA_VALUE_LENGTH: 500,
+  /** Maximum character length for pageContext.entityId */
+  MAX_ENTITY_ID_LENGTH: 100,
+  /** Maximum tokens allowed in a single budget increment — prevents integer overflow */
+  MAX_TOKENS_PER_INCREMENT: 1_000_000,
 } as const;
+
+/**
+ * Daily chat token budgets by subscription plan tier.
+ * Tokens include both input and output tokens.
+ */
+export const CHAT_TOKEN_BUDGET_BY_PLAN = {
+  free: 50_000,
+  pro: 200_000,
+  team: 500_000,
+  enterprise: 2_000_000,
+} as const;
+
+/** Percentage of daily budget that triggers a warning to the user. */
+export const CHAT_BUDGET_WARNING_THRESHOLD = 0.8;
 
 // ==================== GitHub API Constants ====================
 

@@ -14,34 +14,29 @@ import {
   requireTenantId,
   createLogger,
   ValidationError,
+  AuthenticationError,
   NotFoundError,
+  AuthorizationError,
   HTTP_STATUS,
   SERVICE_NAMES,
   CHAT_DEFAULTS,
   getErrorMessage,
   rateLimitByCategory,
-  createChatService,
-  createConversation,
-  createMessage,
-  getMessagesByConversation,
-  getConversationTokenCount,
-  deleteOldestMessages,
-  findConversationsByUser,
-  findConversationById,
-  deleteConversation,
-  updateConversationTitle,
+  chatUserRateLimit,
+  ensureSubscription,
   type ChatCompletionInput,
   type ChatPageContext,
   type ChatPageType,
-  type ChatRepositoryPort,
 } from "@kenchi/shared";
-import { createChatLLMAdapter } from "../adapters/chatLLMAdapter.js";
-import { createChatContextAdapter } from "../adapters/chatContextAdapter.js";
+import { getChatContainer } from "../container/chatContainer.js";
 
 const router = Router();
 const logger = createLogger(SERVICE_NAMES.API);
 
 // ==================== Constants ====================
+
+/** Default plan tier when subscription lookup fails. */
+const DEFAULT_PLAN_TIER = "free" as const;
 
 const VALID_PAGE_TYPES: ReadonlySet<ChatPageType> = new Set([
   "analysis",
@@ -50,46 +45,6 @@ const VALID_PAGE_TYPES: ReadonlySet<ChatPageType> = new Set([
   "overview",
   "failures",
 ]);
-
-// ==================== Chat Repository Adapter ====================
-
-/**
- * Wraps the standalone repository functions into the ChatRepositoryPort interface.
- * This adapter bridges the concrete repository exports to the port abstraction.
- */
-const chatRepositoryAdapter: ChatRepositoryPort = {
-  createConversation: async (input, context) => createConversation(input, context),
-  createMessage: async (input, context) => createMessage(input, context),
-  getMessagesByConversation: async (conversationId, limit, context) =>
-    getMessagesByConversation(conversationId, limit, context),
-  findConversationsByUser: async (tenantId, userId, limit, context) =>
-    findConversationsByUser(tenantId, userId, limit, context),
-  findConversationById: async (id, tenantId, context) =>
-    findConversationById(id, tenantId, context),
-  deleteConversation: async (id, tenantId, context) => deleteConversation(id, tenantId, context),
-  updateConversationTitle: async (id, tenantId, title, context) =>
-    updateConversationTitle(id, tenantId, title, context),
-  getConversationTokenCount: async (conversationId) => getConversationTokenCount(conversationId),
-  deleteOldestMessages: async (conversationId, count, context) =>
-    deleteOldestMessages(conversationId, count, context),
-};
-
-// ==================== Service Instantiation ====================
-
-// Lazy-init to avoid crashing the API service on startup if LLM config is missing
-// let: singleton initialized on first use
-let chatServiceInstance: ReturnType<typeof createChatService> | null = null; // let: lazy singleton
-
-const getChatService = (): ReturnType<typeof createChatService> => {
-  if (!chatServiceInstance) {
-    chatServiceInstance = createChatService({
-      chatRepository: chatRepositoryAdapter,
-      llmPort: createChatLLMAdapter(),
-      contextPort: createChatContextAdapter(),
-    });
-  }
-  return chatServiceInstance;
-};
 
 // ==================== Validation Helpers ====================
 
@@ -134,6 +89,21 @@ const validateChatCompletionBody = (
     });
   }
 
+  if (typeof conversationId === "string") {
+    if (conversationId.length > CHAT_DEFAULTS.MAX_ENTITY_ID_LENGTH) {
+      throw new ValidationError(
+        `conversationId must be at most ${String(CHAT_DEFAULTS.MAX_ENTITY_ID_LENGTH)} characters`,
+        { operation: "validateChatCompletionBody" }
+      );
+    }
+    // Only allow safe characters: alphanumeric, underscore, hyphen
+    if (!/^[a-zA-Z0-9_-]+$/.test(conversationId)) {
+      throw new ValidationError("conversationId contains invalid characters", {
+        operation: "validateChatCompletionBody",
+      });
+    }
+  }
+
   // Validate pageContext
   if (typeof pageContext !== "object" || pageContext === null) {
     throw new ValidationError("pageContext is required and must be an object", {
@@ -156,14 +126,68 @@ const validateChatCompletionBody = (
     });
   }
 
+  if (typeof entityId === "string" && entityId.length > CHAT_DEFAULTS.MAX_ENTITY_ID_LENGTH) {
+    throw new ValidationError(
+      `pageContext.entityId must be at most ${String(CHAT_DEFAULTS.MAX_ENTITY_ID_LENGTH)} characters`,
+      { operation: "validateChatCompletionBody" }
+    );
+  }
+
+  // Validate metadata: reject prototype pollution vectors, cap size, enforce primitive values
+  if (metadata !== undefined && metadata !== null) {
+    if (typeof metadata !== "object" || Array.isArray(metadata)) {
+      throw new ValidationError("pageContext.metadata must be a plain object", {
+        operation: "validateChatCompletionBody",
+      });
+    }
+    const metadataRecord = metadata as Record<string, unknown>;
+    const metadataKeys = Object.keys(metadataRecord);
+    const DANGEROUS_KEYS: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+    const hasDangerousKey = metadataKeys.some((key) => DANGEROUS_KEYS.has(key));
+    if (hasDangerousKey) {
+      throw new ValidationError("pageContext.metadata contains disallowed keys", {
+        operation: "validateChatCompletionBody",
+      });
+    }
+    if (metadataKeys.length > CHAT_DEFAULTS.MAX_METADATA_KEYS) {
+      throw new ValidationError(
+        `pageContext.metadata must have at most ${String(CHAT_DEFAULTS.MAX_METADATA_KEYS)} keys`,
+        { operation: "validateChatCompletionBody" }
+      );
+    }
+    // Values must be primitives (string, number, boolean, null); strings capped
+    const hasInvalidValue = metadataKeys.some((key) => {
+      const val = metadataRecord[key];
+      if (val === null || val === undefined) {
+        return false;
+      }
+      const valType = typeof val;
+      if (valType === "object" || valType === "function" || valType === "symbol") {
+        return true;
+      }
+      return (
+        valType === "string" && (val as string).length > CHAT_DEFAULTS.MAX_METADATA_VALUE_LENGTH
+      );
+    });
+    if (hasInvalidValue) {
+      throw new ValidationError(
+        `pageContext.metadata values must be primitives (string, number, boolean, null) with strings at most ${String(CHAT_DEFAULTS.MAX_METADATA_VALUE_LENGTH)} characters`,
+        { operation: "validateChatCompletionBody" }
+      );
+    }
+  }
+
   const validatedPageContext: ChatPageContext = {
     pageType: pageType as ChatPageType,
     ...(entityId !== undefined && { entityId: entityId as string }),
-    ...(metadata !== undefined && { metadata: metadata as Readonly<Record<string, unknown>> }),
+    ...(metadata !== undefined &&
+      metadata !== null && {
+        metadata: metadata as Readonly<Record<string, unknown>>,
+      }),
   };
 
   return {
-    conversationId: (conversationId ?? undefined) as string | undefined,
+    conversationId: (conversationId as string | null | undefined) ?? undefined,
     userMessage: message as string,
     pageContext: validatedPageContext,
     tenantId,
@@ -185,6 +209,36 @@ const parseLimit = (value: unknown, defaultLimit: number): number => {
   return Math.min(parsed, CHAT_DEFAULTS.MAX_LIMIT);
 };
 
+// ==================== Ownership Verification ====================
+
+/**
+ * Verifies a conversation exists AND belongs to the authenticated user.
+ * Returns the conversation or throws NotFoundError / AuthorizationError.
+ */
+const requireConversationOwnership = async (
+  conversationId: string,
+  tenantId: string,
+  userId: string,
+  context: import("@kenchi/shared").RequestContext,
+  operation: string
+): Promise<void> => {
+  const conversation = await getChatContainer().chatService.getConversation(
+    conversationId,
+    tenantId,
+    context
+  );
+  if (!conversation) {
+    throw new NotFoundError("Conversation not found", {
+      metadata: { conversationId },
+    });
+  }
+  if (conversation.userId !== userId) {
+    throw new AuthorizationError("You do not have access to this conversation", {
+      operation,
+    });
+  }
+};
+
 // ==================== Route Handlers ====================
 
 /**
@@ -193,7 +247,7 @@ const parseLimit = (value: unknown, defaultLimit: number): number => {
  * Streaming chat completion endpoint. Returns text/event-stream (SSE).
  * Each event is a JSON-encoded ChatStreamChunk.
  */
-const handleChatCompletion = async (req: Request, res: Response): Promise<void> => {
+const handleChatCompletion = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   // Validate BEFORE setting SSE headers — errors here are caught by Express error handler
   const tenantId = requireTenantId(req);
   const userId = req.user?.userId;
@@ -212,12 +266,50 @@ const handleChatCompletion = async (req: Request, res: Response): Promise<void> 
   // let: input validated before SSE mode — thrown ValidationError returns JSON error
   let input: ChatCompletionInput; // let: assigned in try block, used after
   try {
-    input = validateChatCompletionBody(req.body, tenantId, userId);
-  } catch (validationError: unknown) {
-    res.status(HTTP_STATUS.BAD_REQUEST).json({
+    const baseInput = validateChatCompletionBody(req.body, tenantId, userId);
+
+    // Resolve plan tier for budget enforcement (fail-open: defaults to "free")
+    // let: planTier may be overridden by subscription lookup
+    let planTier: string = DEFAULT_PLAN_TIER; // let: updated if subscription lookup succeeds
+    try {
+      const subscription = await ensureSubscription(tenantId);
+      planTier = subscription.planId;
+    } catch (subError: unknown) {
+      logger.warn("Failed to resolve plan tier for chat budget — defaulting to free", {
+        error: getErrorMessage(subError),
+        ...req.context,
+      });
+    }
+
+    // Verify conversation ownership when continuing an existing conversation
+    if (baseInput.conversationId) {
+      await requireConversationOwnership(
+        baseInput.conversationId,
+        tenantId,
+        userId,
+        req.context,
+        "handleChatCompletion"
+      );
+    }
+
+    input = { ...baseInput, planTier };
+  } catch (preStreamError: unknown) {
+    const statusCode =
+      preStreamError instanceof AuthorizationError
+        ? HTTP_STATUS.FORBIDDEN
+        : preStreamError instanceof NotFoundError
+          ? HTTP_STATUS.NOT_FOUND
+          : HTTP_STATUS.BAD_REQUEST;
+    const errorCode =
+      preStreamError instanceof AuthorizationError
+        ? "FORBIDDEN"
+        : preStreamError instanceof NotFoundError
+          ? "NOT_FOUND"
+          : "VALIDATION_ERROR";
+    res.status(statusCode).json({
       error: {
-        code: "VALIDATION_ERROR",
-        message: getErrorMessage(validationError),
+        code: errorCode,
+        message: getErrorMessage(preStreamError),
         requestId: req.context?.requestId,
       },
     });
@@ -233,8 +325,8 @@ const handleChatCompletion = async (req: Request, res: Response): Promise<void> 
   });
   res.flushHeaders();
 
-  // Disable socket timeout for streaming (can take 30+ seconds)
-  req.socket.setTimeout(0);
+  // Extend socket timeout for streaming (can take 30+ seconds, cap at 5 minutes)
+  req.socket.setTimeout(300_000);
 
   // Track client disconnect
   // let: mutable flag set by event listener
@@ -244,7 +336,7 @@ const handleChatCompletion = async (req: Request, res: Response): Promise<void> 
   });
 
   try {
-    const stream = getChatService().streamCompletion(input, req.context);
+    const stream = getChatContainer().chatService.streamCompletion(input, req.context);
 
     for await (const chunk of stream) {
       if (clientDisconnected) {
@@ -276,7 +368,7 @@ const handleChatCompletion = async (req: Request, res: Response): Promise<void> 
       res.end();
     }
   }
-};
+});
 
 /**
  * GET /api/v1/chat/conversations
@@ -288,13 +380,13 @@ const handleListConversations = asyncHandler(async (req: Request, res: Response)
   const userId = req.user?.userId;
 
   if (!userId) {
-    throw new ValidationError("Authentication required", {
+    throw new AuthenticationError("Authentication required", {
       operation: "handleListConversations",
     });
   }
 
   const limit = parseLimit(req.query.limit, CHAT_DEFAULTS.DEFAULT_CONVERSATIONS_LIMIT);
-  const conversations = await getChatService().listConversations(
+  const conversations = await getChatContainer().chatService.listConversations(
     tenantId,
     userId,
     limit,
@@ -308,11 +400,18 @@ const handleListConversations = asyncHandler(async (req: Request, res: Response)
  * GET /api/v1/chat/conversations/:id/messages
  *
  * Gets messages for a specific conversation.
- * Verifies the conversation belongs to the authenticated user's tenant.
+ * Verifies the conversation belongs to the authenticated user (tenant + userId).
  */
 const handleGetMessages = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
+  const userId = req.user?.userId;
   const conversationId = req.params.id;
+
+  if (!userId) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleGetMessages",
+    });
+  }
 
   if (!conversationId) {
     throw new ValidationError("Conversation ID is required", {
@@ -320,20 +419,15 @@ const handleGetMessages = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Verify conversation exists and belongs to tenant
-  const conversation = await getChatService().getConversation(
+  const limit = parseLimit(req.query.limit, CHAT_DEFAULTS.DEFAULT_MESSAGES_LIMIT);
+  // Service-level ownership check — verifies conversation belongs to the user
+  const messages = await getChatContainer().chatService.getMessages(
     conversationId,
     tenantId,
+    userId,
+    limit,
     req.context
   );
-  if (!conversation) {
-    throw new NotFoundError("Conversation not found", {
-      metadata: { conversationId },
-    });
-  }
-
-  const limit = parseLimit(req.query.limit, CHAT_DEFAULTS.DEFAULT_MESSAGES_LIMIT);
-  const messages = await getChatService().getMessages(conversationId, limit, req.context);
 
   res.status(HTTP_STATUS.OK).json({ data: messages });
 });
@@ -345,7 +439,14 @@ const handleGetMessages = asyncHandler(async (req: Request, res: Response) => {
  */
 const handleDeleteConversation = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
+  const userId = req.user?.userId;
   const conversationId = req.params.id;
+
+  if (!userId) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleDeleteConversation",
+    });
+  }
 
   if (!conversationId) {
     throw new ValidationError("Conversation ID is required", {
@@ -353,7 +454,20 @@ const handleDeleteConversation = asyncHandler(async (req: Request, res: Response
     });
   }
 
-  const deleted = await getChatService().deleteConversation(conversationId, tenantId, req.context);
+  // Verify ownership before deleting
+  await requireConversationOwnership(
+    conversationId,
+    tenantId,
+    userId,
+    req.context,
+    "handleDeleteConversation"
+  );
+
+  const deleted = await getChatContainer().chatService.deleteConversation(
+    conversationId,
+    tenantId,
+    req.context
+  );
 
   if (!deleted) {
     throw new NotFoundError("Conversation not found", {
@@ -371,7 +485,14 @@ const handleDeleteConversation = asyncHandler(async (req: Request, res: Response
  */
 const handleUpdateConversation = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
+  const userId = req.user?.userId;
   const conversationId = req.params.id;
+
+  if (!userId) {
+    throw new AuthenticationError("Authentication required", {
+      operation: "handleUpdateConversation",
+    });
+  }
 
   if (!conversationId) {
     throw new ValidationError("Conversation ID is required", {
@@ -394,7 +515,16 @@ const handleUpdateConversation = asyncHandler(async (req: Request, res: Response
     );
   }
 
-  const updated = await getChatService().updateConversationTitle(
+  // Verify ownership before updating
+  await requireConversationOwnership(
+    conversationId,
+    tenantId,
+    userId,
+    req.context,
+    "handleUpdateConversation"
+  );
+
+  const updated = await getChatContainer().chatService.updateConversationTitle(
     conversationId,
     tenantId,
     title.trim(),
@@ -412,7 +542,12 @@ const handleUpdateConversation = asyncHandler(async (req: Request, res: Response
 
 // ==================== Route Definitions ====================
 
-router.post("/api/v1/chat/completions", rateLimitByCategory("expensive"), handleChatCompletion);
+router.post(
+  "/api/v1/chat/completions",
+  rateLimitByCategory("expensive"),
+  chatUserRateLimit(),
+  handleChatCompletion
+);
 
 router.get("/api/v1/chat/conversations", rateLimitByCategory("readonly"), handleListConversations);
 

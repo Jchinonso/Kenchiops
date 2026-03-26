@@ -645,7 +645,12 @@ export {
   getMessagesByConversation,
   getConversationTokenCount,
   deleteOldestMessages,
+  countConversationsByUser,
+  countMessagesByConversation,
 } from "./database/index.js";
+
+// Chat token usage module (Budget enforcement)
+export { type ChatTokenUsage, getTodayTokenUsage, incrementTokenUsage } from "./database/index.js";
 
 // Chat types and service (Copilot Drawer streaming and context)
 export type {
@@ -656,6 +661,7 @@ export type {
   ChatStreamChunk,
   ChatRAGSource,
   ChatLLMStreamDelta,
+  ChatLLMOptions,
   ChatLLMPort,
   ChatLLMMessage,
   ChatContextPort,
@@ -665,8 +671,18 @@ export type {
   ChatConversationSummary,
   CreateConversationPortInput,
   CreateMessagePortInput,
+  ChatBudgetStatus,
+  ChatBudgetPort,
 } from "./chat/index.js";
 export { createChatService, type ChatService, type ChatServiceDeps } from "./chat/index.js";
+export { classifyChatMessageTopic } from "./chat/index.js";
+export {
+  createChatBudgetFunctions,
+  checkChatBudget,
+  incrementChatTokenUsage,
+  type ChatTokenUsageRepositoryPort,
+} from "./chat/index.js";
+export { chatUserRateLimit } from "./chat/index.js";
 
 // HTTP utilities
 export {
@@ -846,6 +862,10 @@ export {
 
 // Singleflight request coalescing
 export { coalesce } from "./http/index.js";
+
+// HTTP error classification
+export { classifyHttpError } from "./http/index.js";
+export type { ClassifiedHttpError, HttpErrorCategory } from "./http/index.js";
 
 // Formatting utilities
 export {
@@ -1073,6 +1093,7 @@ export { extractJsonFromResponse, parseJsonObject } from "./llm/index.js";
 export {
   isOpenRouterProvider,
   getEffectiveBaseUrl,
+  resolveLLMModel,
   createLLMSDKClient,
   getLLMSDKClient,
   resetLLMSDKClient,
@@ -1416,6 +1437,16 @@ export {
   checkProcessingTimeQuota,
   type TenantQuotaConfig,
   type QuotaCheckResult,
+  // Per-tenant alert budget quotas
+  getAlertBudgetForPlan,
+  checkAlertAnalysisQuota,
+  incrementAlertAnalysisCount,
+  checkActiveStreamQuota,
+  incrementActiveStreamCount,
+  decrementActiveStreamCount,
+  checkWindowQuota,
+  incrementWindowCount,
+  type AlertBudgetConfig,
 } from "./queue/index.js";
 
 // Redis caching
@@ -1577,6 +1608,33 @@ export type {
   FetchedBuildLogs,
   CIOutputPort,
 } from "./ports/index.js";
+
+// Deploy platform port interfaces
+export type {
+  DeployLogSourcePort,
+  DeployPlatform,
+  DeployStatus,
+  DeployMetadata,
+  DeployWebhookResult,
+  FetchDeployLogsParams,
+  DeployLogData,
+  LogLine,
+  LogDrainBatchResult,
+  DeployLogInput,
+} from "./ports/index.js";
+
+// Ingestion buffer
+export type {
+  IngestionBufferPort,
+  BufferMetadata,
+  AppendResult,
+  FlushResult,
+  FlushTriggerResult,
+  IncidentSummary,
+  TimelineEntry,
+} from "./ingestion/index.js";
+
+export { createIngestionBuffer } from "./ingestion/index.js";
 
 // Health check utilities
 export {
@@ -1868,3 +1926,76 @@ export {
   type FineTuningWorkflowResult,
   type ProgressCallback,
 } from "./finetuning/index.js";
+
+// Diagnostics framework (shared output types for both pipelines)
+export type {
+  ProblemCategory,
+  ProblemSubcategory,
+  Action as DiagnosticAction,
+  ArtifactSummary as DiagnosticArtifactSummary,
+  IncidentRef,
+  RunbookRef,
+  DocRef,
+  RootCauseAnalysis,
+  CausalityChain,
+  DiagnosticImpact,
+  DiagnosticRecommendations,
+  DiagnosticRelatedContext,
+  DiagnosticResult,
+  DegradedReason,
+  PartialAnalysis,
+  DegradedResult,
+  DiagnosticOutput,
+  DiagnosticRAGContext,
+  RAGEnrichmentInput,
+} from "./diagnostics/index.js";
+
+export {
+  enrichDiagnosticWithRAG,
+  formatRAGContextForPrompt,
+  mapLLMAnalysisToDiagnostic,
+  buildDegradedFromPipelineFailure,
+  matchKnownPattern,
+  buildDiagnosticFromPattern,
+  calculateCorrelationScore,
+  correlateEvents,
+  findCorrelatedIncidents,
+} from "./diagnostics/index.js";
+
+export type {
+  ErrorSignature,
+  PatternMatchResult,
+  CorrelatedDeployEvent,
+  CorrelatedAlertEvent,
+  CorrelatedIncident,
+} from "./diagnostics/index.js";
+
+// Alert context evidence model (Pipeline B)
+export type {
+  AlertContextSource,
+  AlertSeverity as AlertContextSeverity,
+  MetricSnapshot,
+  MetricDataPoint,
+  LogSnippet,
+  TraceSpan,
+  StackFrame,
+  BreadcrumbEvent,
+  RelatedAlert as AlertRelatedAlert,
+  AlertEvidence,
+  AlertTimeWindow,
+  AlertContext,
+} from "./alertContext/index.js";
+
+// Alert context truncation cascade (Pipeline B)
+export {
+  ALERT_CONTEXT_BUDGET,
+  TRUNCATION_LIMITS,
+  truncateAlertContext,
+  estimateAlertContextTokens,
+  truncateRelatedAlerts,
+  truncateBreadcrumbs,
+  filterErrorTraceSpans,
+  truncateLogSnippets,
+  downsampleMetrics,
+  truncateStackFrames,
+} from "./alertContext/index.js";

@@ -107,3 +107,7 @@ export type { RateLimitCategory, RateLimitPlanId } from "./rateLimitByCategoryTy
 
 // Singleflight request coalescing
 export { coalesce } from "./singleflight.js";
+
+// HTTP error classification
+export { classifyHttpError } from "./classifyHttpError.js";
+export type { ClassifiedHttpError, HttpErrorCategory } from "./classifyHttpErrorTypes.js";

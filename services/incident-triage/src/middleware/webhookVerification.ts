@@ -12,7 +12,7 @@
 
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { createLogger } from "@kenchi/shared";
+import { createLogger, config } from "@kenchi/shared";
 
 // ==================== Types ====================
 
@@ -200,9 +200,23 @@ export const createWebhookVerificationMiddleware = (
   const verificationLogger = createLogger(`${provider}-verify`);
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    // Skip verification if no secret configured (development mode)
+    // Fail closed: reject if no secret configured in production
     if (!secret) {
-      verificationLogger.warn(`${provider} webhook secret not configured - skipping verification`);
+      const isProduction = config.NODE_ENV === "production";
+      if (isProduction) {
+        verificationLogger.error(
+          `${provider} webhook secret not configured in production — rejecting`,
+          {
+            provider,
+            operation: "verifySignature",
+          }
+        );
+        res.status(401).json({ error: "Webhook verification not configured" });
+        return;
+      }
+      verificationLogger.warn(
+        `${provider} webhook secret not configured - skipping verification (non-production)`
+      );
       next();
       return;
     }

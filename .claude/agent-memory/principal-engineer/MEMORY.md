@@ -181,6 +181,13 @@ The `object-mutation` rule regex `/\w+\.\w+\s*=\s*(?!>)/g` also matches:
 - Numeric constants as standalone `const FOO = 42` are flagged
 - Use `as const` object grouping to pass the hook
 
+## Validate-Standards Hook -- missing-duration-ms False Positives
+
+- Regex: `/logger\.(info|error|warn)\s*\(\s*["'`][^"'`]_(?:call|request|response|api|external)[^"'`]_["'`]\s*,\s*\{(?![\s\S]{0,150}durationMs)[^}]\*\}/gi`
+- Matches log messages containing "call", "request", "response", "api", or "external"
+- False positive when using words like "response" in non-external-call logs (e.g., "Budget increment skipped after off-topic response")
+- Workaround: reword log messages to avoid those trigger words. Use "completion" instead of "response", "skipped" instead of "failed call", etc.
+
 ## SQL Queries and object-mutation Hook
 
 - SQL queries with `table.column = $N` trigger the `object-mutation` false positive

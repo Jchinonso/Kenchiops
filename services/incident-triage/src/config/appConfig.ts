@@ -22,9 +22,7 @@ export type { IncidentTriageConfig } from "../types/incidentTriageTypes.js";
 /**
  * Validated incident triage configuration.
  *
- * Service-specific secrets (PagerDuty, Datadog, Grafana, Prometheus, Slack, LLM)
- * use process.env because they are not in the shared config module.
- * Vercel/Netlify webhook secrets use shared config (already defined there).
+ * All env vars accessed through shared config module (CLAUDE.md: never process.env directly).
  */
 export const appConfig: IncidentTriageConfig = {
   port: config.PORT ? parseInt(String(config.PORT), 10) : SERVICE_PORTS.INCIDENT_TRIAGE,
@@ -32,31 +30,37 @@ export const appConfig: IncidentTriageConfig = {
   serviceName: SERVICE_NAMES.INCIDENT_TRIAGE,
   version: SERVICE_VERSIONS.INCIDENT_TRIAGE,
   databaseUrl: config.DATABASE_URL,
-  // Service-specific secrets not in shared config — direct env access justified
-  pagerDutyWebhookSecret: process.env.PAGERDUTY_WEBHOOK_SECRET ?? "",
-  datadogWebhookSecret: process.env.DATADOG_WEBHOOK_SECRET ?? "",
-  grafanaWebhookSecret: process.env.GRAFANA_WEBHOOK_SECRET ?? "",
-  prometheusWebhookSecret: process.env.PROMETHEUS_WEBHOOK_SECRET ?? "",
-  // Vercel/Netlify secrets available via shared config
+  // Webhook secrets
+  pagerDutyWebhookSecret: config.PAGERDUTY_WEBHOOK_SECRET ?? "",
+  datadogWebhookSecret: config.DATADOG_WEBHOOK_SECRET ?? "",
+  grafanaWebhookSecret: config.GRAFANA_WEBHOOK_SECRET ?? "",
+  prometheusWebhookSecret: config.PROMETHEUS_WEBHOOK_SECRET ?? "",
   vercelWebhookSecret: config.VERCEL_WEBHOOK_SECRET ?? "",
   netlifyWebhookSecret: config.NETLIFY_WEBHOOK_SECRET ?? "",
-  // Service-specific LLM model override — not in shared config
-  triageLlmModel: process.env.TRIAGE_LLM_MODEL ?? OPENROUTER_DEFAULTS.MODEL,
-  // Service-specific Slack webhook URL for incident notifications — not in shared config
-  slackIncidentWebhookUrl: process.env.SLACK_INCIDENT_WEBHOOK_URL ?? "",
-  // Monitoring API keys (optional — adapters skip when key is empty) — not in shared config
-  datadogApiKey: process.env.DATADOG_API_KEY ?? "",
-  datadogAppKey: process.env.DATADOG_APP_KEY ?? "",
-  datadogApiBaseUrl: process.env.DATADOG_API_BASE_URL ?? "https://api.datadoghq.com",
-  grafanaApiToken: process.env.GRAFANA_API_TOKEN ?? "",
-  grafanaApiBaseUrl: process.env.GRAFANA_API_BASE_URL ?? "",
-  // Prometheus is typically internal (no auth), only base URL required
-  prometheusApiBaseUrl: process.env.PROMETHEUS_API_BASE_URL ?? "",
-  pagerdutyApiToken: process.env.PAGERDUTY_API_TOKEN ?? "",
-  vercelApiToken: process.env.VERCEL_MONITORING_API_TOKEN ?? "",
-  vercelTeamId: process.env.VERCEL_TEAM_ID ?? "",
-  netlifyApiToken: process.env.NETLIFY_API_TOKEN ?? "",
-  netlifySiteId: process.env.NETLIFY_SITE_ID ?? "",
+  sentryWebhookSecret: config.SENTRY_WEBHOOK_SECRET ?? "",
+  opsgenieWebhookSecret: config.OPSGENIE_WEBHOOK_SECRET ?? "",
+  newrelicWebhookSecret: config.NEWRELIC_WEBHOOK_SECRET ?? "",
+  // LLM model override
+  triageLlmModel: config.TRIAGE_LLM_MODEL || OPENROUTER_DEFAULTS.MODEL,
+  // Slack incident notifications
+  slackIncidentWebhookUrl: config.SLACK_INCIDENT_WEBHOOK_URL ?? "",
+  // Monitoring API keys (optional — adapters skip when key is empty)
+  datadogApiKey: config.DATADOG_API_KEY ?? "",
+  datadogAppKey: config.DATADOG_APP_KEY ?? "",
+  datadogApiBaseUrl: config.DATADOG_API_BASE_URL ?? "https://api.datadoghq.com",
+  grafanaApiToken: config.GRAFANA_API_TOKEN ?? "",
+  grafanaApiBaseUrl: config.GRAFANA_API_BASE_URL ?? "",
+  prometheusApiBaseUrl: config.PROMETHEUS_API_BASE_URL ?? "",
+  pagerdutyApiToken: config.PAGERDUTY_API_TOKEN ?? "",
+  vercelApiToken: config.VERCEL_API_TOKEN ?? "",
+  vercelTeamId: config.VERCEL_TEAM_ID ?? "",
+  netlifyApiToken: config.NETLIFY_API_TOKEN ?? "",
+  netlifySiteId: config.NETLIFY_SITE_ID ?? "",
+  sentryApiToken: config.SENTRY_API_TOKEN ?? "",
+  sentryOrganizationSlug: config.SENTRY_ORGANIZATION_SLUG ?? "",
+  opsgenieApiKey: config.OPSGENIE_API_KEY ?? "",
+  newrelicApiKey: config.NEWRELIC_API_KEY ?? "",
+  newrelicAccountId: config.NEWRELIC_ACCOUNT_ID ?? "",
 } as const;
 
 // ==================== Startup Validation ====================
@@ -98,6 +102,19 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
   if (!cfg.netlifyWebhookSecret) {
     startupLogger.warn("NETLIFY_WEBHOOK_SECRET is empty — Netlify webhook verification will fail");
   }
+  if (!cfg.sentryWebhookSecret) {
+    startupLogger.warn("SENTRY_WEBHOOK_SECRET is empty — Sentry webhook verification will fail");
+  }
+  if (!cfg.opsgenieWebhookSecret) {
+    startupLogger.warn(
+      "OPSGENIE_WEBHOOK_SECRET is empty — OpsGenie webhook verification will fail"
+    );
+  }
+  if (!cfg.newrelicWebhookSecret) {
+    startupLogger.warn(
+      "NEWRELIC_WEBHOOK_SECRET is empty — New Relic webhook verification will fail"
+    );
+  }
   if (!slackUrl) {
     startupLogger.warn("SLACK_INCIDENT_WEBHOOK_URL is empty — Slack dispatch will fail");
   }
@@ -120,6 +137,15 @@ const assertTriageConfig = (cfg: IncidentTriageConfig): void => {
   }
   if (!cfg.netlifyApiToken) {
     startupLogger.info("NETLIFY_API_TOKEN not set — Netlify monitoring evidence disabled");
+  }
+  if (!cfg.sentryApiToken) {
+    startupLogger.info("SENTRY_API_TOKEN not set — Sentry enrichment disabled");
+  }
+  if (!cfg.opsgenieApiKey) {
+    startupLogger.info("OPSGENIE_API_KEY not set — OpsGenie enrichment disabled");
+  }
+  if (!cfg.newrelicApiKey) {
+    startupLogger.info("NEWRELIC_API_KEY not set — New Relic enrichment disabled");
   }
 
   // Validate monitoring base URLs to prevent SSRF via misconfigured env vars

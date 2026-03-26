@@ -24,6 +24,7 @@ import type {
   CreateMessageInput,
   TokenCountRow,
   DeletedCountRow,
+  ConversationCountRow,
 } from "./types.js";
 import {
   mapRowToConversation,
@@ -221,7 +222,7 @@ export const createMessage = async (
   const result = await query<ChatMessageRow>(
     `WITH updated_conversation AS (
       UPDATE chat_conversations SET updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $2 AND tenant_id = $7
     )
     INSERT INTO chat_messages (id, conversation_id, role, content, token_count, rag_context_used)
     VALUES ($1, $2, $3, $4, $5, $6)
@@ -233,6 +234,7 @@ export const createMessage = async (
       input.content,
       input.tokenCount ?? null,
       input.ragContextUsed ?? false,
+      input.tenantId,
     ]
   );
 
@@ -276,9 +278,13 @@ export const getMessagesByConversation = async (
  * Gets the total token count for all messages in a conversation.
  *
  * @param conversationId - Conversation ID
+ * @param _context - Request context for logging
  * @returns Total token count (0 if no messages or no token counts recorded)
  */
-export const getConversationTokenCount = async (conversationId: string): Promise<number> => {
+export const getConversationTokenCount = async (
+  conversationId: string,
+  _context: RequestContext
+): Promise<number> => {
   validateNonEmptyString(conversationId, "conversationId");
 
   const result = await query<TokenCountRow>(
@@ -333,4 +339,35 @@ export const deleteOldestMessages = async (
   }
 
   return deletedCount;
+};
+
+/**
+ * Counts the number of conversations for a user within a tenant.
+ */
+export const countConversationsByUser = async (
+  tenantId: string,
+  userId: string,
+  _context: RequestContext
+): Promise<number> => {
+  const result = await query<ConversationCountRow>(
+    "SELECT COUNT(*) as count FROM chat_conversations WHERE tenant_id = $1 AND user_id = $2",
+    [tenantId, userId]
+  );
+  return parseInt(result.rows[0]?.count ?? "0", PARSE_INT_RADIX);
+};
+
+/**
+ * Counts the total number of messages in a conversation.
+ */
+export const countMessagesByConversation = async (
+  conversationId: string,
+  _context: RequestContext
+): Promise<number> => {
+  validateNonEmptyString(conversationId, "conversationId");
+
+  const result = await query<ConversationCountRow>(
+    "SELECT COUNT(*) as count FROM chat_messages WHERE conversation_id = $1",
+    [conversationId]
+  );
+  return parseInt(result.rows[0]?.count ?? "0", PARSE_INT_RADIX);
 };

@@ -83,6 +83,7 @@ export interface CreateConversationInput {
  */
 export interface CreateMessageInput {
   readonly conversationId: string;
+  readonly tenantId: string;
   readonly role: ChatMessageRole;
   readonly content: string;
   readonly tokenCount?: number;
@@ -103,4 +104,9 @@ export interface TokenCountRow {
  */
 export interface DeletedCountRow {
   readonly deleted_count: string;
+}
+
+/** Row shape for COUNT(*) queries. */
+export interface ConversationCountRow {
+  readonly count: string; // PostgreSQL returns count as string
 }

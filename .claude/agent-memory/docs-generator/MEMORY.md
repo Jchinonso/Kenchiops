@@ -122,3 +122,19 @@
 - shared/src modules confirmed: actions, aggregation, billing, cache, concurrency, constants, core, database, finetuning, formatting, health, http, integrations, llm, observability, ports, queue, rag, rateLimit, safety, security, shutdown
 - Frontend pages: Dashboard overview, CICDAnalyses, CICDFailures, CICDPipelines, ActiveIncidents, Investigations, WebhookActivity, Settings, Integrations, TeamManagement, Onboarding, Login
 - RAG module has ~35 files covering ingestion, search, drift detection, multi-hop, cost controls, evaluation
+
+### Chat / Copilot System (2026-03-23)
+
+- Chat service: `packages/shared/src/chat/chatService.ts` -- factory pattern `createChatService(deps)`
+- Chat types: `packages/shared/src/chat/types.ts` -- ChatLLMPort, ChatContextPort, ChatRepositoryPort, ChatStreamChunk (discriminated union)
+- Chat helpers: `packages/shared/src/chat/helpers.ts` -- system prompt, token estimation, message trimming
+- Chat constants: `CHAT_DEFAULTS` in `packages/shared/src/constants/api.ts` (MAX_MESSAGE_LENGTH=10K, MAX_CONTEXT_TOKENS=24K, CHARS_PER_TOKEN=4)
+- Chat DB: `packages/shared/src/database/chatConversation/` -- repository.ts, types.ts, helpers.ts
+- Chat DB tables: `chat_conversations` (id, tenant_id, user_id, title, page_context) and `chat_messages` (id, conversation_id, role, content, token_count, rag_context_used)
+- Chat routes: `services/api/src/routes/chatRoutes.ts` -- POST completions (SSE), GET conversations, GET messages, PUT title, DELETE conversation
+- Chat LLM adapter: `services/api/src/adapters/chatLLMAdapter.ts` -- wraps OpenAI SDK, 30s connect timeout, NO max_tokens set
+- Chat context adapter: `services/api/src/adapters/chatContextAdapter.ts` -- fetches analysis/incident context + RAG search
+- Frontend hook: `services/frontend/src/hooks/useCopilotChat/hooks.ts` -- fetch-based SSE streaming, no TanStack Query
+- Rate limiting: only `rateLimitByCategory("expensive")` = 10 req/min/tenant (shared with all expensive endpoints)
+- Plan rate limits: `PLAN_RATE_LIMITS` in `constants/rateLimitCategory.ts` (free=200, pro=300, team=500, enterprise=2000 per min)
+- Created `docs/CHAT_TOKEN_PROTECTION.md` -- 6-layer cost protection design doc

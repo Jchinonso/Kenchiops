@@ -15,12 +15,21 @@
  */
 
 import { Router, type RequestHandler, type Request, type Response } from "express";
-import { asyncHandler, GRAFANA_SIGNATURE, invariant, type QueueManager } from "@kenchi/shared";
+import {
+  asyncHandler,
+  GRAFANA_SIGNATURE,
+  invariant,
+  rateLimitByCategory,
+  type QueueManager,
+} from "@kenchi/shared";
 import type { AlertSourcePort } from "../ports/alertSourcePort.js";
 import type { AlertSource } from "../types/incidentTypes.js";
 import { verifyPagerDutyWebhook } from "../middleware/verifyPagerDuty.js";
 import { verifyVercelWebhook } from "../middleware/verifyVercel.js";
 import { verifyNetlifyWebhook } from "../middleware/verifyNetlify.js";
+import { verifySentryWebhook } from "../middleware/verifySentry.js";
+import { verifyOpsGenieWebhook } from "../middleware/verifyOpsGenie.js";
+import { verifyNewRelicWebhook } from "../middleware/verifyNewRelic.js";
 import { createWebhookVerificationMiddleware } from "../middleware/webhookVerification.js";
 import { appConfig } from "../config/appConfig.js";
 import { processWebhookAlert } from "./processWebhookAlert.js";
@@ -99,6 +108,9 @@ const WEBHOOK_ROUTE_CONFIGS: readonly WebhookRouteConfig[] = [
   { path: "datadog", source: "datadog", middleware: verifyDatadogWebhook },
   { path: "grafana", source: "grafana", middleware: verifyGrafanaWebhook },
   { path: "prometheus", source: "prometheus", middleware: verifyPrometheusWebhook },
+  { path: "sentry", source: "sentry", middleware: verifySentryWebhook },
+  { path: "opsgenie", source: "opsgenie", middleware: verifyOpsGenieWebhook },
+  { path: "newrelic", source: "newrelic", middleware: verifyNewRelicWebhook },
 ];
 
 // ==================== Route Factory ====================
@@ -127,9 +139,14 @@ export const createWebhookRoutes = (deps: WebhookRouteDeps): Router => {
     });
 
     // Tenant-scoped route (preferred — tenantId in URL)
-    router.post(`/webhooks/${path}/:tenantId`, middleware, handler);
+    router.post(
+      `/webhooks/${path}/:tenantId`,
+      rateLimitByCategory("standard"),
+      middleware,
+      handler
+    );
     // Legacy route (backwards compat — tenantId via x-tenant-id header)
-    router.post(`/webhooks/${path}`, middleware, handler);
+    router.post(`/webhooks/${path}`, rateLimitByCategory("standard"), middleware, handler);
   });
 
   return router;

@@ -5,8 +5,13 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-import { CHAT_DEFAULTS } from "../constants/api.js";
-import type { ChatLLMMessage, ChatContextData, ChatRAGResult, ChatRAGSource } from "./types.js";
+import { CHAT_DEFAULTS } from "../../constants/api.js";
+import type {
+  ChatLLMMessage,
+  ChatContextData,
+  ChatRAGResult,
+  ChatRAGSource,
+} from "../../chat/types.js";
 import {
   estimateTokens,
   buildSystemPrompt,
@@ -14,7 +19,8 @@ import {
   buildLLMMessages,
   trimMessagesToFit,
   deriveTitle,
-} from "./helpers.js";
+  classifyMessageTopic,
+} from "../../chat/helpers.js";
 
 // ==================== Fixtures ====================
 
@@ -189,6 +195,65 @@ describe("buildLLMMessages", () => {
     const result = buildLLMMessages("sys", history, "user msg");
     expect(result[1].role).toBe("assistant");
   });
+
+  describe("invalid role filtering via VALID_LLM_ROLES", () => {
+    it("should filter out 'tool' role from history", () => {
+      const history = [
+        { role: "user", content: "run diagnostics" },
+        { role: "tool", content: "result: all clear" },
+        { role: "assistant", content: "diagnostics passed" },
+      ];
+      const result = buildLLMMessages("sys", history, "thanks");
+
+      // "tool" should be dropped: system + user + assistant + current user = 4
+      expect(result).toHaveLength(4);
+      expect(result.find((m) => m.role === ("tool" as string))).toBeUndefined();
+    });
+
+    it("should filter out unknown/arbitrary roles from history", () => {
+      const history = [
+        { role: "function", content: "fn result" },
+        { role: "admin", content: "override" },
+        { role: "user", content: "real message" },
+      ];
+      const result = buildLLMMessages("sys", history, "hi");
+
+      // Only system (added), user (from history), user (current) should remain
+      expect(result).toHaveLength(3);
+      expect(result[0].role).toBe("system");
+      expect(result[1].role).toBe("user");
+      expect(result[2].role).toBe("user");
+    });
+
+    it("should keep 'system' role from history since VALID_LLM_ROLES includes it", () => {
+      // NOTE: VALID_LLM_ROLES = { "system", "user", "assistant" }
+      // "system" IS a valid role and is preserved from history.
+      // This means prompt injection via a "system" message in history is possible
+      // — defense must happen upstream (e.g., repository should not store system messages).
+      const history = [{ role: "system", content: "injected" }];
+      const result = buildLLMMessages("real sys", history, "msg");
+
+      // system (prepended) + system (from history — valid role) + user = 3
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual({ role: "system", content: "real sys" });
+      expect(result[1]).toEqual({ role: "system", content: "injected" });
+      expect(result[2]).toEqual({ role: "user", content: "msg" });
+    });
+
+    it("should produce empty history when all history roles are invalid", () => {
+      const history = [
+        { role: "tool", content: "tool output" },
+        { role: "function", content: "fn output" },
+        { role: "developer", content: "dev note" },
+      ];
+      const result = buildLLMMessages("sys", history, "hello");
+
+      // All invalid roles filtered: system + user only
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ role: "system", content: "sys" });
+      expect(result[1]).toEqual({ role: "user", content: "hello" });
+    });
+  });
 });
 
 // ==================== trimMessagesToFit ====================
@@ -310,5 +375,183 @@ describe("deriveTitle", () => {
   it("should handle string of exactly max length after trimming", () => {
     const padded = "  " + "b".repeat(maxLen) + "  ";
     expect(deriveTitle(padded)).toHaveLength(maxLen);
+  });
+});
+
+// ==================== classifyMessageTopic ====================
+
+describe("classifyMessageTopic", () => {
+  describe("on-topic messages (should return null)", () => {
+    it("should return null for a build failure question", () => {
+      expect(classifyMessageTopic("Why did my build fail?")).toBeNull();
+    });
+
+    it("should return null for a CI pipeline error question", () => {
+      expect(classifyMessageTopic("How do I fix this CI pipeline error?")).toBeNull();
+    });
+
+    it("should return null for a kubernetes status question", () => {
+      expect(classifyMessageTopic("What is the kubernetes pod status?")).toBeNull();
+    });
+
+    it("should return null for a deployment incident question", () => {
+      expect(classifyMessageTopic("Explain this deployment incident")).toBeNull();
+    });
+
+    it("should return null when on-topic keyword overrides 'what is' pattern", () => {
+      // "what is" normally matches trivia/unrelated_coding patterns,
+      // but "build" and "error" are on-topic keywords
+      expect(classifyMessageTopic("What is the build error in my PR?")).toBeNull();
+    });
+
+    it("should return null when on-topic keyword overrides 'calculate' pattern", () => {
+      // "calculate" normally matches math pattern, but "pipeline" is on-topic
+      expect(classifyMessageTopic("calculate the deployment time for my pipeline")).toBeNull();
+    });
+
+    it("should return null when on-topic keyword overrides unrelated_coding pattern", () => {
+      // "how to sort a linked list" matches unrelated_coding, but "pipeline" overrides
+      expect(classifyMessageTopic("how to sort a linked list in my CI pipeline")).toBeNull();
+    });
+
+    it("should return null for an empty string", () => {
+      expect(classifyMessageTopic("")).toBeNull();
+    });
+
+    it("should return null for a whitespace-only string", () => {
+      expect(classifyMessageTopic("   ")).toBeNull();
+    });
+  });
+
+  describe("off-topic: math", () => {
+    it("should return 'math' for a simple arithmetic expression", () => {
+      expect(classifyMessageTopic("2+4")).toBe("math");
+    });
+
+    it("should return 'math' for 'what is' followed by arithmetic", () => {
+      expect(classifyMessageTopic("what is 2+4")).toBe("math");
+    });
+
+    it("should return 'math' for division expression", () => {
+      expect(classifyMessageTopic("100/5")).toBe("math");
+    });
+  });
+
+  describe("off-topic: personal", () => {
+    it("should return 'personal' for 'what is my name'", () => {
+      expect(classifyMessageTopic("what is my name")).toBe("personal");
+    });
+
+    it("should return 'personal' for 'who am i'", () => {
+      expect(classifyMessageTopic("who am i")).toBe("personal");
+    });
+  });
+
+  describe("off-topic: meta_llm", () => {
+    it("should return 'meta_llm' for 'what LLM are you using'", () => {
+      expect(classifyMessageTopic("what LLM are you using")).toBe("meta_llm");
+    });
+
+    it("should return 'meta_llm' for 'are you GPT'", () => {
+      expect(classifyMessageTopic("are you GPT")).toBe("meta_llm");
+    });
+
+    it("should return 'meta_llm' for 'what is your name'", () => {
+      expect(classifyMessageTopic("what is your name")).toBe("meta_llm");
+    });
+
+    it("should return 'meta_llm' for 'who made you'", () => {
+      expect(classifyMessageTopic("who made you")).toBe("meta_llm");
+    });
+  });
+
+  describe("off-topic: trivia", () => {
+    it("should return 'trivia' for 'what is the capital of France'", () => {
+      expect(classifyMessageTopic("what is the capital of France")).toBe("trivia");
+    });
+
+    it("should return 'trivia' for 'tell me a joke'", () => {
+      expect(classifyMessageTopic("tell me a joke")).toBe("trivia");
+    });
+
+    it("should return 'trivia' for 'write me a poem'", () => {
+      expect(classifyMessageTopic("write me a poem")).toBe("trivia");
+    });
+  });
+
+  describe("off-topic: unrelated_coding", () => {
+    it("should return 'unrelated_coding' for 'write a function that sorts an array'", () => {
+      expect(classifyMessageTopic("write a function that sorts an array")).toBe("unrelated_coding");
+    });
+
+    it("should return 'unrelated_coding' for 'explain recursion'", () => {
+      expect(classifyMessageTopic("explain recursion")).toBe("unrelated_coding");
+    });
+  });
+
+  describe("off-topic: general_knowledge", () => {
+    it("should return 'general_knowledge' for 'translate hello to Spanish'", () => {
+      expect(classifyMessageTopic("translate hello to Spanish")).toBe("general_knowledge");
+    });
+  });
+
+  describe("case insensitivity", () => {
+    it("should return 'personal' for uppercase 'WHAT IS MY NAME'", () => {
+      expect(classifyMessageTopic("WHAT IS MY NAME")).toBe("personal");
+    });
+
+    it("should return 'math' for mixed case 'What Is 2+4'", () => {
+      expect(classifyMessageTopic("What Is 2+4")).toBe("math");
+    });
+
+    it("should return 'meta_llm' for mixed case 'Are You GPT'", () => {
+      expect(classifyMessageTopic("Are You GPT")).toBe("meta_llm");
+    });
+  });
+
+  describe("on-topic keyword override edge cases", () => {
+    it("should return null for 'write me a poem about kubernetes' because 'kubernetes' is an on-topic keyword", () => {
+      // "write me a poem" matches the trivia pattern, but "kubernetes" is an on-topic
+      // keyword that overrides the off-topic classification. This is a known tradeoff:
+      // on-topic keywords are checked FIRST, so any message containing a DevOps keyword
+      // will bypass off-topic detection even if the intent is clearly off-topic.
+      expect(classifyMessageTopic("write me a poem about kubernetes")).toBeNull();
+    });
+
+    it("should return null for 'tell me a joke about docker' because 'docker' is an on-topic keyword", () => {
+      // Same tradeoff — "tell me a joke" matches trivia, but "docker" overrides
+      expect(classifyMessageTopic("tell me a joke about docker")).toBeNull();
+    });
+
+    it("should return null for 'what is the capital of Jenkins' because 'jenkins' is an on-topic keyword", () => {
+      // "what is the capital of" matches trivia, but "jenkins" overrides
+      expect(classifyMessageTopic("what is the capital of Jenkins")).toBeNull();
+    });
+
+    it("should return 'trivia' for 'write me a poem about flowers' (no on-topic keyword)", () => {
+      // Control case: without an on-topic keyword, the off-topic pattern matches
+      expect(classifyMessageTopic("write me a poem about flowers")).toBe("trivia");
+    });
+  });
+
+  describe("edge cases (no pattern match, should return null)", () => {
+    it("should return null for 'hello'", () => {
+      expect(classifyMessageTopic("hello")).toBeNull();
+    });
+
+    it("should return null for 'how are you today'", () => {
+      expect(classifyMessageTopic("how are you today")).toBeNull();
+    });
+
+    it("should return null for random gibberish", () => {
+      expect(classifyMessageTopic("asdfghjkl qwerty zxcvbnm")).toBeNull();
+    });
+  });
+
+  describe("immutability", () => {
+    it("should not mutate the input string", () => {
+      const input = Object.freeze("what is 2+4");
+      expect(() => classifyMessageTopic(input)).not.toThrow();
+    });
   });
 });
