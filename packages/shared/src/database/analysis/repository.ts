@@ -149,6 +149,29 @@ export const getAnalysisByEventId = async (
 };
 
 /**
+ * Retrieves the most recent analysis by aggregation key.
+ * Used by the feedback handler to resolve composite keys to actual analysis IDs.
+ */
+export const getLatestAnalysisByAggregationKey = async (
+  aggregationKey: string
+): Promise<AnalysisRecord | null> => {
+  validateId(aggregationKey, "aggregationKey");
+
+  try {
+    const result = await query<AnalysisRow>(ANALYSIS_QUERIES.GET_LATEST_BY_AGGREGATION_KEY, [
+      aggregationKey,
+    ]);
+    return extractFirstAnalysisRow(result.rows);
+  } catch (error) {
+    logger.error("Failed to get analysis by aggregation key", {
+      aggregationKey,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Retrieves analyses by model version ID.
  *
  * @param modelVersionId - The model version ID

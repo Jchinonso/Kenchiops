@@ -12,6 +12,7 @@ import {
   HTTP_STATUS,
   parseFeedbackUrl,
   createOrUpdateAnalysisFeedback,
+  getLatestAnalysisByAggregationKey,
   getErrorMessage,
   config,
   UI_EMOJI,
@@ -162,17 +163,32 @@ router.get(
         return;
       }
 
+      // Resolve composite key (repo:commitSha) to actual analysis ID.
+      // The feedback URL uses "owner/repo:commitSha" but the DB uses "ana_" IDs.
+      const rawId = params.analysisId;
+      const aggregationKey = rawId.includes(":") ? rawId.split(":")[0] : rawId;
+      const analysis = await getLatestAnalysisByAggregationKey(aggregationKey);
+
+      if (!analysis) {
+        feedbackLogger.warn("Analysis not found for feedback", { rawId, aggregationKey });
+        res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .send(generateFeedbackHtml(false, "The analysis for this feedback was not found."));
+        return;
+      }
+
       // Record feedback with deduplication
-      const tenantId = req.context?.tenantId ?? "unknown";
+      const tenantId = analysis.tenantId ?? req.context?.tenantId ?? "unknown";
       const result = await createOrUpdateAnalysisFeedback({
-        analysisId: params.analysisId,
+        analysisId: analysis.id,
         feedbackType,
         userId,
         tenantId,
       });
 
       feedbackLogger.info("Feedback recorded via URL", {
-        analysisId: params.analysisId,
+        analysisId: analysis.id,
+        aggregationKey,
         feedbackType,
         userId,
         wasUpdated: result.wasUpdated,
