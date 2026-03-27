@@ -59,10 +59,11 @@ const getUserIdentifier = (req: Request): string => {
     return `github:${githubUser}`;
   }
 
-  // Fallback to IP-based identifier
-  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
-  const ipStr = Array.isArray(ip) ? ip[0] : ip;
-  return `ip:${ipStr}`;
+  // Fallback to IP-based identifier (take first IP from x-forwarded-for chain)
+  const raw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+  const fullIp = Array.isArray(raw) ? raw[0] : raw;
+  const clientIp = fullIp.split(",")[0].trim();
+  return `ip:${clientIp}`.slice(0, 50);
 };
 
 /**
