@@ -138,11 +138,6 @@ router.get(
       if (!params) {
         feedbackLogger.warn("Invalid or expired feedback URL", {
           url: req.originalUrl,
-          reconstructedUrl: fullUrl,
-          hasAnalysisId: Boolean(req.query.analysisId),
-          hasType: Boolean(req.query.type),
-          hasExpires: Boolean(req.query.expires),
-          hasSig: Boolean(req.query.sig),
         });
 
         res
