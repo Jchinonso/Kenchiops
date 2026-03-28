@@ -12,6 +12,7 @@ import {
   getCachedCheckAnalysis,
   getErrorMessage,
   ingestPRFixComments,
+  ingestAnalysisLesson,
   createFailureContext,
   KENCHI_BRANDING,
   PR_FIX_COMMENT_CONFIG,
@@ -21,6 +22,7 @@ import {
   getOrFetchPullRequestFiles,
   type PRComment,
   type CachedAnalysis,
+  type AnalysisLessonContext,
 } from "@kenchi/shared";
 import {
   GITHUB_CHECK_ACTIONS,
@@ -306,11 +308,55 @@ export const handleCheckRunSuccess = async (
 
     const errorSummary = extractErrorSummary(cachedFailure);
 
+    // Automatically ingest the resolved failure analysis as a lesson.
+    // This ensures the Knowledge Base gets populated even without PR fix comments.
+    let lessonIngested = false; // let: set to true if lesson ingestion succeeds
+    try {
+      const lessonContext: AnalysisLessonContext = {
+        repository: repoFullName,
+        commitSha: check_run.head_sha,
+        failures: [
+          {
+            checkRunId: check_run.id,
+            checkName: check_run.name,
+            conclusion: "success",
+            analysis: cachedFailure.analysis ?? errorSummary,
+            identifiedCause: cachedFailure.identifiedCause ?? errorSummary,
+            confidence: cachedFailure.confidence ?? 0.7,
+            annotations: [],
+            recommendedActions: cachedFailure.recommendedActions ?? [],
+            testFailures: [],
+            timestamp: new Date(cachedFailure.analyzedAt),
+          },
+        ],
+        tenantId: undefined,
+        prNumber: prs[0],
+        installationId,
+      };
+
+      const lessonResult = await ingestAnalysisLesson(lessonContext);
+      lessonIngested = lessonResult.success;
+
+      successLogger.info("Auto-ingested resolved failure as lesson", {
+        repository: repoFullName,
+        checkName: check_run.name,
+        success: lessonResult.success,
+        lessonsCreated: lessonResult.lessonsCreated,
+      });
+    } catch (lessonError: unknown) {
+      successLogger.warn("Failed to auto-ingest analysis lesson", {
+        repository: repoFullName,
+        checkName: check_run.name,
+        error: getErrorMessage(lessonError),
+      });
+    }
+
     successLogger.info("Completed fix knowledge capture for successful check", {
       repository: repoFullName,
       checkName: check_run.name,
       prsProcessed: prs.length,
       totalFixCommentsIngested: totalIngested,
+      lessonIngested,
     });
 
     return {
@@ -318,7 +364,9 @@ export const handleCheckRunSuccess = async (
       message:
         totalIngested > 0
           ? `Captured ${totalIngested} fix explanations`
-          : "No fix explanations found in PR comments",
+          : lessonIngested
+            ? "Auto-ingested resolved failure as knowledge"
+            : "No fix explanations found in PR comments",
       fixCommentsIngested: totalIngested,
       previousFailure: {
         checkName: check_run.name,
