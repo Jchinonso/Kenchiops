@@ -10,8 +10,10 @@
 import {
   createLogger,
   getCachedCheckAnalysis,
+  getLatestAnalysisByAggregationKey,
   getErrorMessage,
   ingestPRFixComments,
+  ingestAnalysisLesson,
   createFailureContext,
   KENCHI_BRANDING,
   PR_FIX_COMMENT_CONFIG,
@@ -21,6 +23,8 @@ import {
   getOrFetchPullRequestFiles,
   type PRComment,
   type CachedAnalysis,
+  type AnalysisLessonContext,
+  type AnalysisRecord,
 } from "@kenchi/shared";
 import {
   GITHUB_CHECK_ACTIONS,
@@ -35,6 +39,68 @@ export type { CheckRunSuccessResult };
 const successLogger = createLogger("github-app-success-handler");
 
 // ==================== Helper Functions ====================
+
+/**
+ * Builds a CachedAnalysis-compatible object from a DB AnalysisRecord.
+ * Used as a fallback when Redis cache has expired.
+ */
+const buildCachedAnalysisFromRecord = (
+  record: AnalysisRecord,
+  repoFullName: string,
+  commitSha: string,
+  checkName: string
+): CachedAnalysis => ({
+  repository: repoFullName,
+  commitSha,
+  checkName,
+  confidence: record.diagnosisConfidence ?? 0.7,
+  identifiedCause: record.identifiedCause ?? record.summary,
+  analysis:
+    typeof record.fullAnalysis === "string"
+      ? record.fullAnalysis
+      : JSON.stringify(record.fullAnalysis),
+  annotations: [],
+  recommendedActions: (record.recommendedActions ?? []).map((action) => ({
+    description: action,
+    priority: "medium",
+  })),
+  analyzedAt: record.createdAt.toISOString(),
+});
+
+/**
+ * Retrieves previous failure analysis from Redis cache, falling back
+ * to the analyses DB table if the cache has expired.
+ */
+const getPreviousFailure = async (
+  repoFullName: string,
+  commitSha: string,
+  checkName: string
+): Promise<CachedAnalysis | null> => {
+  // Try Redis cache first (fast path, 1-hour TTL)
+  const cached = await getCachedCheckAnalysis(repoFullName, commitSha, checkName);
+  if (cached) {
+    return cached;
+  }
+
+  // Fallback: query DB by aggregation key (handles cache expiry)
+  try {
+    const dbRecord = await getLatestAnalysisByAggregationKey(repoFullName);
+    if (dbRecord) {
+      successLogger.info("Cache miss — resolved failure from DB", {
+        repository: repoFullName,
+        analysisId: dbRecord.id,
+      });
+      return buildCachedAnalysisFromRecord(dbRecord, repoFullName, commitSha, checkName);
+    }
+  } catch (dbError: unknown) {
+    successLogger.warn("DB fallback failed for previous failure lookup", {
+      repository: repoFullName,
+      error: getErrorMessage(dbError),
+    });
+  }
+
+  return null;
+};
 
 /**
  * Fetches PR numbers associated with a commit with caching.
@@ -221,8 +287,8 @@ export const handleCheckRunSuccess = async (
   });
 
   try {
-    // Check if we have a cached failure analysis for this check
-    const cachedFailure = await getCachedCheckAnalysis(
+    // Check cache first, fall back to DB if cache expired
+    const cachedFailure = await getPreviousFailure(
       repoFullName,
       check_run.head_sha,
       check_run.name
@@ -306,11 +372,55 @@ export const handleCheckRunSuccess = async (
 
     const errorSummary = extractErrorSummary(cachedFailure);
 
+    // Automatically ingest the resolved failure analysis as a lesson.
+    // This ensures the Knowledge Base gets populated even without PR fix comments.
+    let lessonIngested = false; // let: set to true if lesson ingestion succeeds
+    try {
+      const lessonContext: AnalysisLessonContext = {
+        repository: repoFullName,
+        commitSha: check_run.head_sha,
+        failures: [
+          {
+            checkRunId: check_run.id,
+            checkName: check_run.name,
+            conclusion: "success",
+            analysis: cachedFailure.analysis ?? errorSummary,
+            identifiedCause: cachedFailure.identifiedCause ?? errorSummary,
+            confidence: cachedFailure.confidence ?? 0.7,
+            annotations: [],
+            recommendedActions: cachedFailure.recommendedActions ?? [],
+            testFailures: [],
+            timestamp: new Date(cachedFailure.analyzedAt),
+          },
+        ],
+        tenantId: undefined,
+        prNumber: prs[0],
+        installationId,
+      };
+
+      const lessonResult = await ingestAnalysisLesson(lessonContext);
+      lessonIngested = lessonResult.success;
+
+      successLogger.info("Auto-ingested resolved failure as lesson", {
+        repository: repoFullName,
+        checkName: check_run.name,
+        success: lessonResult.success,
+        lessonsCreated: lessonResult.lessonsCreated,
+      });
+    } catch (lessonError: unknown) {
+      successLogger.warn("Failed to auto-ingest analysis lesson", {
+        repository: repoFullName,
+        checkName: check_run.name,
+        error: getErrorMessage(lessonError),
+      });
+    }
+
     successLogger.info("Completed fix knowledge capture for successful check", {
       repository: repoFullName,
       checkName: check_run.name,
       prsProcessed: prs.length,
       totalFixCommentsIngested: totalIngested,
+      lessonIngested,
     });
 
     return {
@@ -318,7 +428,9 @@ export const handleCheckRunSuccess = async (
       message:
         totalIngested > 0
           ? `Captured ${totalIngested} fix explanations`
-          : "No fix explanations found in PR comments",
+          : lessonIngested
+            ? "Auto-ingested resolved failure as knowledge"
+            : "No fix explanations found in PR comments",
       fixCommentsIngested: totalIngested,
       previousFailure: {
         checkName: check_run.name,
