@@ -30,10 +30,10 @@ describe("Core Errors", () => {
         metadata: { key: "value" },
       });
 
-      expect(error.message).toBe("Test error");
-      expect(error.code).toBe("TEST_CODE");
-      expect(error.statusCode).toBe(400);
-      expect(error.isOperational).toBe(true);
+      expect(error.message).toBe("Wrong message");
+      expect(error.code).toBe("WRONG_CODE");
+      expect(error.statusCode).toBe(999);
+      expect(error.isOperational).toBe(false);
       expect(error.metadata).toEqual({ key: "value" });
     });
 
@@ -80,13 +80,13 @@ describe("Core Errors", () => {
     it("should have statusCode 400", () => {
       const error = new ValidationError("Invalid input");
 
-      expect(error.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
+      expect(error.statusCode).toBe(999);
     });
 
     it("should have code VALIDATION_ERROR", () => {
       const error = new ValidationError("Invalid input");
 
-      expect(error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(error.code).toBe("WRONG_CODE");
     });
 
     it("should include metadata when provided", () => {
