@@ -9,6 +9,7 @@ import request from "supertest";
 // Mock functions
 const mockParseFeedbackUrl = jest.fn();
 const mockCreateOrUpdateAnalysisFeedback = jest.fn();
+const mockGetLatestAnalysisByAggregationKey = jest.fn();
 
 // Mock dependencies
 jest.mock("@kenchi/shared", () => ({
@@ -32,6 +33,7 @@ jest.mock("@kenchi/shared", () => ({
   },
   parseFeedbackUrl: mockParseFeedbackUrl,
   createOrUpdateAnalysisFeedback: mockCreateOrUpdateAnalysisFeedback,
+  getLatestAnalysisByAggregationKey: mockGetLatestAnalysisByAggregationKey,
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
@@ -73,6 +75,12 @@ describe("Feedback Routes", () => {
     mockCreateOrUpdateAnalysisFeedback.mockResolvedValue({
       id: "feedback-123",
       wasUpdated: false,
+    });
+
+    mockGetLatestAnalysisByAggregationKey.mockResolvedValue({
+      id: "ana_resolved-123",
+      aggregationKey: "analysis-123",
+      tenantId: "test-tenant",
     });
 
     // Create Express app with routes
@@ -137,7 +145,7 @@ describe("Feedback Routes", () => {
 
         expect(mockCreateOrUpdateAnalysisFeedback).toHaveBeenCalledWith(
           expect.objectContaining({
-            analysisId: "analysis-123",
+            analysisId: "ana_resolved-123",
             feedbackType: "correct",
             userId: expect.stringMatching(/^(github:|ip:)/),
           })
