@@ -10,6 +10,7 @@
 import {
   createLogger,
   getCachedCheckAnalysis,
+  getLatestAnalysisByAggregationKey,
   getErrorMessage,
   ingestPRFixComments,
   ingestAnalysisLesson,
@@ -23,6 +24,7 @@ import {
   type PRComment,
   type CachedAnalysis,
   type AnalysisLessonContext,
+  type AnalysisRecord,
 } from "@kenchi/shared";
 import {
   GITHUB_CHECK_ACTIONS,
@@ -37,6 +39,68 @@ export type { CheckRunSuccessResult };
 const successLogger = createLogger("github-app-success-handler");
 
 // ==================== Helper Functions ====================
+
+/**
+ * Builds a CachedAnalysis-compatible object from a DB AnalysisRecord.
+ * Used as a fallback when Redis cache has expired.
+ */
+const buildCachedAnalysisFromRecord = (
+  record: AnalysisRecord,
+  repoFullName: string,
+  commitSha: string,
+  checkName: string
+): CachedAnalysis => ({
+  repository: repoFullName,
+  commitSha,
+  checkName,
+  confidence: record.diagnosisConfidence ?? 0.7,
+  identifiedCause: record.identifiedCause ?? record.summary,
+  analysis:
+    typeof record.fullAnalysis === "string"
+      ? record.fullAnalysis
+      : JSON.stringify(record.fullAnalysis),
+  annotations: [],
+  recommendedActions: (record.recommendedActions ?? []).map((action) => ({
+    description: action,
+    priority: "medium",
+  })),
+  analyzedAt: record.createdAt.toISOString(),
+});
+
+/**
+ * Retrieves previous failure analysis from Redis cache, falling back
+ * to the analyses DB table if the cache has expired.
+ */
+const getPreviousFailure = async (
+  repoFullName: string,
+  commitSha: string,
+  checkName: string
+): Promise<CachedAnalysis | null> => {
+  // Try Redis cache first (fast path, 1-hour TTL)
+  const cached = await getCachedCheckAnalysis(repoFullName, commitSha, checkName);
+  if (cached) {
+    return cached;
+  }
+
+  // Fallback: query DB by aggregation key (handles cache expiry)
+  try {
+    const dbRecord = await getLatestAnalysisByAggregationKey(repoFullName);
+    if (dbRecord) {
+      successLogger.info("Cache miss — resolved failure from DB", {
+        repository: repoFullName,
+        analysisId: dbRecord.id,
+      });
+      return buildCachedAnalysisFromRecord(dbRecord, repoFullName, commitSha, checkName);
+    }
+  } catch (dbError: unknown) {
+    successLogger.warn("DB fallback failed for previous failure lookup", {
+      repository: repoFullName,
+      error: getErrorMessage(dbError),
+    });
+  }
+
+  return null;
+};
 
 /**
  * Fetches PR numbers associated with a commit with caching.
@@ -223,8 +287,8 @@ export const handleCheckRunSuccess = async (
   });
 
   try {
-    // Check if we have a cached failure analysis for this check
-    const cachedFailure = await getCachedCheckAnalysis(
+    // Check cache first, fall back to DB if cache expired
+    const cachedFailure = await getPreviousFailure(
       repoFullName,
       check_run.head_sha,
       check_run.name
