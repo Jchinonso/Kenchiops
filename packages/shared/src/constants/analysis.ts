@@ -48,6 +48,11 @@ export const ANALYSIS_QUERIES = {
     SELECT * FROM analyses WHERE event_id = $1 AND tenant_id = $2
   `,
 
+  GET_LATEST_BY_AGGREGATION_KEY: `
+    SELECT * FROM analyses WHERE aggregation_key = $1
+    ORDER BY created_at DESC LIMIT 1
+  `,
+
   GET_BY_MODEL_VERSION: `
     SELECT * FROM analyses
     WHERE model_version_id = $1

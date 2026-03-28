@@ -144,6 +144,7 @@ export {
   createAnalysis,
   getAnalysisById,
   getAnalysisByEventId,
+  getLatestAnalysisByAggregationKey,
   getAnalysesByModelVersion,
   countAnalysesByModelVersion,
   getAnalysesByTenant,
