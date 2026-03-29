@@ -24,6 +24,7 @@ import {
   syncDueSources,
   getKnowledgeDocCountsByTypeForTenant,
   getKnowledgeDocsByTenant,
+  getFullDocumentContent,
   getTenantRAGStats,
   type IngestKnowledgeDocInput,
   type SyncAllResult,
@@ -474,6 +475,29 @@ const handleListDocuments = async (req: Request, res: Response): Promise<void> =
 };
 
 /**
+ * Handles fetching the full concatenated content for a document detail view.
+ * Reassembles all chunks into a single document.
+ */
+const handleGetFullContent = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = getEffectiveTenantId(req);
+  if (!tenantId) {
+    throw new ValidationError("tenantId is required");
+  }
+
+  const { title, docType } = req.query;
+  if (!title || !docType) {
+    throw new ValidationError("title and docType query params are required");
+  }
+
+  const fullContent = await getFullDocumentContent(String(title), String(docType), tenantId);
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: { content: fullContent },
+  });
+});
+
+/**
  * Handles external source sync requests.
  */
 const handleSync = async (req: Request, res: Response): Promise<void> => {
@@ -539,6 +563,13 @@ router.get(
   API_ROUTES.RAG_DOCUMENTS,
   rateLimitByCategory("readonly"),
   asyncHandler(handleListDocuments)
+);
+
+/** GET /api/rag/documents/full-content - Get full concatenated content for document detail */
+router.get(
+  `${API_ROUTES.RAG_DOCUMENTS}/full-content`,
+  rateLimitByCategory("readonly"),
+  handleGetFullContent
 );
 
 /** POST /api/rag/sync - Sync external sources */
