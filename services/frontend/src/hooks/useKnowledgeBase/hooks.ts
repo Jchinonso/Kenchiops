@@ -66,6 +66,28 @@ export const useKnowledgeDocuments = (
   );
 };
 
+// ==================== Full Document Content ====================
+
+/** Fetches full concatenated content for the document detail view. */
+export const useFullDocumentContent = (
+  title: string | undefined,
+  docType: string | undefined
+): UseFetchResult<{ readonly content: string }> => {
+  const url =
+    title && docType
+      ? `${API_BASE}/api/rag/documents/full-content?title=${encodeURIComponent(title)}&docType=${encodeURIComponent(docType)}`
+      : "";
+
+  return useToFetchResult(
+    useQuery({
+      queryKey: ["knowledgeBase", "fullContent", title, docType],
+      queryFn: () => fetchQuery<{ readonly content: string }>(url),
+      enabled: Boolean(title && docType),
+      staleTime: STALE_TIME,
+    })
+  );
+};
+
 // ==================== Add Document Mutation ====================
 
 /**

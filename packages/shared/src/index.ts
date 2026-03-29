@@ -235,6 +235,7 @@ export {
   getKnowledgeDocCountsByType,
   getKnowledgeDocCountsByTypeForTenant,
   getKnowledgeDocsByTenant,
+  getFullDocumentContent,
 } from "./database/index.js";
 export {
   // Feedback repository

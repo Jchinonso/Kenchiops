@@ -113,18 +113,19 @@ export const KNOWLEDGE_DOC_QUERIES = {
            chunk_index, embedding_model, embedding_version, tenant_id, metadata,
            created_at, updated_at
     FROM knowledge_documents
-    WHERE tenant_id = $1
+    WHERE tenant_id = $1 AND chunk_index = 0
     ORDER BY created_at DESC
     LIMIT $2 OFFSET $3
   `,
 
   /** SECURITY (VULN-704): Exclude embedding column to avoid transferring ~12KB per row */
+  /** Show only first chunk per document as the representative row */
   GET_BY_TENANT_AND_DOC_TYPE: `
     SELECT id, repository, parent_id, doc_type, title, content, source_url, file_path,
            chunk_index, embedding_model, embedding_version, tenant_id, metadata,
            created_at, updated_at
     FROM knowledge_documents
-    WHERE tenant_id = $1 AND doc_type = $2
+    WHERE tenant_id = $1 AND doc_type = $2 AND chunk_index = 0
     ORDER BY created_at DESC
     LIMIT $3 OFFSET $4
   `,
@@ -132,13 +133,21 @@ export const KNOWLEDGE_DOC_QUERIES = {
   COUNT_BY_TENANT: `
     SELECT COUNT(*) as count
     FROM knowledge_documents
-    WHERE tenant_id = $1
+    WHERE tenant_id = $1 AND chunk_index = 0
   `,
 
   COUNT_BY_TENANT_AND_DOC_TYPE: `
     SELECT COUNT(*) as count
     FROM knowledge_documents
-    WHERE tenant_id = $1 AND doc_type = $2
+    WHERE tenant_id = $1 AND doc_type = $2 AND chunk_index = 0
+  `,
+
+  /** Fetch all chunks for a document by matching title + doc_type + tenant, ordered by chunk_index */
+  GET_FULL_CONTENT: `
+    SELECT content, chunk_index
+    FROM knowledge_documents
+    WHERE title = $1 AND doc_type = $2 AND tenant_id = $3
+    ORDER BY chunk_index ASC
   `,
 
   DELETE_BY_ID: `

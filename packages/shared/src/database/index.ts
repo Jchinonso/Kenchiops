@@ -110,6 +110,7 @@ export {
   getKnowledgeDocCountsByType,
   getKnowledgeDocCountsByTypeForTenant,
   getKnowledgeDocsByTenant,
+  getFullDocumentContent,
   getKnowledgeDocById,
   incrementKnowledgeDocHitCount,
   batchIncrementKnowledgeDocHitCounts,

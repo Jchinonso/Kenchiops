@@ -152,6 +152,31 @@ export const createKnowledgeDocsBatch = async (
 };
 
 /**
+ * Fetches all chunks for a document and concatenates their content.
+ * Used by the detail view to display the full document.
+ */
+export const getFullDocumentContent = async (
+  title: string,
+  docType: string,
+  tenantId: string
+): Promise<string> => {
+  try {
+    const result = await query<{ readonly content: string; readonly chunk_index: number }>(
+      KNOWLEDGE_DOC_QUERIES.GET_FULL_CONTENT,
+      [title, docType, tenantId]
+    );
+    return result.rows.map((row) => row.content).join("\n\n");
+  } catch (error) {
+    logger.error("Failed to get full document content", {
+      title,
+      docType,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Searches for similar knowledge documents using vector similarity.
  *
  * @param embedding - Query embedding vector

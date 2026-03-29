@@ -35,6 +35,7 @@ export {
   getKnowledgeDocCountsByType,
   getKnowledgeDocCountsByTypeForTenant,
   getKnowledgeDocsByTenant,
+  getFullDocumentContent,
 } from "./repository.js";
 
 // Hit tracking operations

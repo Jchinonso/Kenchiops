@@ -21,4 +21,5 @@ export {
   useDeleteDocument,
   useBulkDeleteDocuments,
   usePurgeAllDocuments,
+  useFullDocumentContent,
 } from "./hooks";
