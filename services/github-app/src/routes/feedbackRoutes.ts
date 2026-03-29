@@ -13,12 +13,14 @@ import {
   parseFeedbackUrl,
   createOrUpdateAnalysisFeedback,
   getLatestAnalysisByAggregationKey,
+  ingestAnalysisLesson,
   getErrorMessage,
   config,
   UI_EMOJI,
   AppError,
   rateLimitByCategory,
   type AnalysisFeedbackType,
+  type AnalysisLessonContext,
 } from "@kenchi/shared";
 
 const router = Router();
@@ -186,17 +188,64 @@ router.get(
         tenantId,
       });
 
+      // Trigger lesson ingestion on positive feedback
+      let lessonIngested = false; // let: set to true if ingestion succeeds
+      if (feedbackType === "correct") {
+        try {
+          const lessonContext: AnalysisLessonContext = {
+            repository: analysis.aggregationKey ?? aggregationKey,
+            commitSha: analysis.headSha ?? rawId.split(":")[1] ?? "unknown",
+            failures: [
+              {
+                checkRunId: 0,
+                checkName: analysis.ciProvider ?? "CI",
+                conclusion: "failure",
+                analysis:
+                  typeof analysis.fullAnalysis === "string"
+                    ? analysis.fullAnalysis
+                    : JSON.stringify(analysis.fullAnalysis),
+                identifiedCause: analysis.identifiedCause ?? analysis.summary,
+                confidence: analysis.diagnosisConfidence ?? 0.7,
+                annotations: [],
+                recommendedActions: (analysis.recommendedActions ?? []).map((action) => ({
+                  description: action,
+                  priority: "medium" as const,
+                })),
+                testFailures: [],
+                timestamp: analysis.createdAt,
+              },
+            ],
+            tenantId: analysis.tenantId ?? undefined,
+            confirmedBy: userId,
+          };
+          const lessonResult = await ingestAnalysisLesson(lessonContext);
+          lessonIngested = lessonResult.success;
+          feedbackLogger.info("Lesson ingested from thumbs-up", {
+            analysisId: analysis.id,
+            lessonsCreated: lessonResult.lessonsCreated,
+          });
+        } catch (lessonError: unknown) {
+          feedbackLogger.warn("Lesson ingestion failed from thumbs-up", {
+            analysisId: analysis.id,
+            error: getErrorMessage(lessonError),
+          });
+        }
+      }
+
       feedbackLogger.info("Feedback recorded via URL", {
         analysisId: analysis.id,
         aggregationKey,
         feedbackType,
         userId,
         wasUpdated: result.wasUpdated,
+        lessonIngested,
       });
 
       const message =
         feedbackType === "correct"
-          ? "Thanks! Your feedback helps improve our analysis accuracy."
+          ? lessonIngested
+            ? "Thanks! Your feedback has been recorded and the analysis was added to the Knowledge Base."
+            : "Thanks! Your feedback helps improve our analysis accuracy."
           : "Thanks for letting us know. We'll use this to improve.";
 
       res.status(HTTP_STATUS.OK).send(generateFeedbackHtml(true, message, result.wasUpdated));
