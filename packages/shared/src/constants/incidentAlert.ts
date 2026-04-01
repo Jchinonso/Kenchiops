@@ -275,6 +275,9 @@ export const INCIDENT_TRIAGE_RESULT_QUERIES = {
   GET_BY_ALERT_ID: `
     SELECT * FROM incident_triage_results WHERE alert_id = $1 AND tenant_id = $2
   `,
+  GET_BY_ALERT_IDS: `
+    SELECT * FROM incident_triage_results WHERE alert_id = ANY($1) AND tenant_id = $2
+  `,
   UPDATE_ENRICHMENT: buildEnrichmentQuery(),
   UPDATE_AI_SUMMARY: buildAiSummaryQuery(),
   UPDATE_DISPATCH_RESULTS: buildDispatchResultsQuery(),

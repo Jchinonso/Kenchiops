@@ -527,7 +527,7 @@ describe("createChatService", () => {
       expect(mockRepo.deleteOldestMessages).not.toHaveBeenCalled();
     });
 
-    it("should re-run RAG with enriched query when page context is found", async () => {
+    it("should fetch RAG with enriched query when page context is found", async () => {
       const contextData: ChatContextData = {
         entityType: "analysis",
         title: "Build fail",
@@ -544,8 +544,12 @@ describe("createChatService", () => {
 
       await collectChunks(service.streamCompletion(createInput(), testContext));
 
-      // searchRAG should be called twice: initial + enriched
-      expect(mockCtx.searchRAG).toHaveBeenCalledTimes(2);
+      // searchRAG called once with enriched query (no redundant initial fetch)
+      expect(mockCtx.searchRAG).toHaveBeenCalledTimes(1);
+      // The enriched query includes page context title + summary
+      const enrichedQuery = mockCtx.searchRAG.mock.calls[0][0] as string;
+      expect(enrichedQuery).toContain("Build fail");
+      expect(enrichedQuery).toContain("Missing dep");
     });
 
     it("should fetch incident context when pageType is incident", async () => {

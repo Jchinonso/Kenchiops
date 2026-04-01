@@ -273,6 +273,12 @@ export const CHAT_DEFAULTS = {
   MAX_ENTITY_ID_LENGTH: 100,
   /** Maximum tokens allowed in a single budget increment — prevents integer overflow */
   MAX_TOKENS_PER_INCREMENT: 1_000_000,
+  /** Maximum tokens for investigation context in system prompt */
+  MAX_INVESTIGATION_CONTEXT_TOKENS: 4_000,
+  /** Maximum evidence items to include in the investigation prompt section */
+  MAX_INVESTIGATION_EVIDENCE_IN_PROMPT: 10,
+  /** Maximum character length for a single evidence summary in the prompt */
+  MAX_INVESTIGATION_EVIDENCE_SUMMARY_LENGTH: 200,
 } as const;
 
 /**

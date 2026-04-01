@@ -21,6 +21,7 @@ import {
   type ChatRAGSource,
   type RequestContext,
 } from "@kenchi/shared";
+import type { ChatInvestigationAdapter } from "./chatInvestigationAdapter.js";
 
 const PROVIDER = "database" as const;
 const logger = createLogger("chat-context-adapter");
@@ -69,9 +70,12 @@ const formatRAGResults = (
 
 /**
  * Creates a ChatContextPort adapter backed by the shared database
- * repositories and RAG search.
+ * repositories and RAG search. Optionally wires the investigation adapter
+ * for incident page chat enrichment.
  */
-export const createChatContextAdapter = (): ChatContextPort => ({
+export const createChatContextAdapter = (
+  investigationAdapter?: ChatInvestigationAdapter
+): ChatContextPort => ({
   getAnalysisContext: async (
     entityId: string,
     tenantId: string,
@@ -236,4 +240,9 @@ export const createChatContextAdapter = (): ChatContextPort => ({
       return { formattedContext: "", sources: [] };
     }
   },
+
+  investigateIncident: investigationAdapter
+    ? async (userMessage, alertId, tenantId, context) =>
+        investigationAdapter.investigate(userMessage, alertId, tenantId, context)
+    : undefined,
 });

@@ -100,17 +100,17 @@ Raw Log (up to 10MB)
 
 ### Key Parameters
 
-| Parameter                | Value                            | Purpose                                                           |
-| ------------------------ | -------------------------------- | ----------------------------------------------------------------- |
-| `TARGET_TOKENS`          | 3,000                            | Optimal chunk size for extraction                                 |
-| `MAX_TOKENS`             | 4,000                            | Hard maximum per chunk                                            |
-| `OVERLAP_LINES`          | 40                               | Context preservation between chunks                               |
-| `MAX_CHUNKS`             | 100                              | Runaway protection                                                |
-| `SMALL_LOG_THRESHOLD`    | 30,000 tokens                    | Skip chunking for small logs                                      |
-| `EXTRACTION_CONCURRENCY` | 15                               | Parallel LLM calls                                                |
-| `EXTRACTION_TIMEOUT_MS`  | 10,000 (request) / 60,000 (hard) | Per-request timeout via resilientPost + 60s Promise.race hard cap |
-| `MAX_FINAL_ARTIFACTS`    | 50                               | Cap artifacts sent to Stage 4                                     |
-| `MAX_PROMPT_TOKENS`      | 40,000                           | LLM input ceiling                                                 |
+| Parameter                | Value         | Purpose                               |
+| ------------------------ | ------------- | ------------------------------------- |
+| `TARGET_TOKENS`          | 3,000         | Optimal chunk size for extraction     |
+| `MAX_TOKENS`             | 4,000         | Hard maximum per chunk                |
+| `OVERLAP_LINES`          | 40            | Context preservation between chunks   |
+| `MAX_CHUNKS`             | 100           | Runaway protection                    |
+| `SMALL_LOG_THRESHOLD`    | 30,000 tokens | Skip chunking for small logs          |
+| `EXTRACTION_CONCURRENCY` | 15            | Parallel LLM calls                    |
+| `EXTRACTION_TIMEOUT_MS`  | 10,000        | Per-request timeout via resilientPost |
+| `MAX_FINAL_ARTIFACTS`    | 50            | Cap artifacts sent to Stage 4         |
+| `MAX_PROMPT_TOKENS`      | 40,000        | LLM input ceiling                     |
 
 ### Extending to New Providers
 
@@ -182,7 +182,7 @@ Alert Webhook
 
 ```
 AlertContext {
-  source: "sentry" | "datadog" | "prometheus" | "grafana" | "pagerduty" | "opsgenie"
+  source: "sentry" | "datadog" | "prometheus" | "grafana" | "pagerduty" | "opsgenie" | "newrelic"
   alertId: string
   severity: "critical" | "warning" | "info"
   title: string
@@ -319,9 +319,9 @@ Total LLM context budget: 40,000 tokens
 System prompt + instructions:     ~2,000 tokens
 AlertContext evidence:            ~20,000 tokens (hard cap)
 RAG enrichment (runbooks, docs):   ~8,000 tokens
-Safety buffer:                    ~10,000 tokens
+Safety buffer:                     ~8,000 tokens
                                   ──────────────
-Total:                             40,000 tokens
+Total:                             38,000 tokens
 ```
 
 ### Truncation Priority Order
@@ -712,23 +712,23 @@ DegradedResult {
 
 ### Phase 2: Build Pipeline B (observability tools) — COMPLETE
 
-| Item                                          | Status | Location                                                               |
-| --------------------------------------------- | ------ | ---------------------------------------------------------------------- |
-| AlertContext type definitions                 | Done   | `packages/shared/src/alertContext/types.ts`                            |
-| Alert context truncation cascade              | Done   | `packages/shared/src/alertContext/truncation.ts`                       |
-| Alert budget quota (per-tenant limits)        | Done   | `packages/shared/src/queue/alertBudgetQuota.ts`                        |
-| Diagnostics framework (taxonomy, correlation) | Done   | `packages/shared/src/diagnostics/`                                     |
-| Sentry adapter (alert + context)              | Done   | `services/incident-triage/src/adapters/sentry*.ts`                     |
-| PagerDuty adapter                             | Done   | `services/incident-triage/src/adapters/pagerDuty*.ts`                  |
-| OpsGenie adapter (alert + context)            | Done   | `services/incident-triage/src/adapters/opsgenie*.ts`                   |
-| New Relic adapter (alert + context)           | Done   | `services/incident-triage/src/adapters/newRelic*.ts`                   |
-| Datadog monitoring adapter                    | Done   | `services/incident-triage/src/adapters/datadogMonitoringAdapter.ts`    |
-| Grafana monitoring adapter                    | Done   | `services/incident-triage/src/adapters/grafanaMonitoringAdapter.ts`    |
-| Prometheus monitoring adapter                 | Done   | `services/incident-triage/src/adapters/prometheusMonitoringAdapter.ts` |
-| Alert analysis service                        | Done   | `services/incident-triage/src/services/alertAnalysisService.ts`        |
-| Webhook routes (all providers)                | Done   | `services/incident-triage/src/routes/webhookRoutes.ts`                 |
-| Webhook verification middleware               | Done   | `services/incident-triage/src/middleware/verify*.ts`                   |
-| CircleCI integration (CI pipeline)            | Done   | `services/github-app/src/adapters/circleci*.ts`                        |
+| Item                                          | Status | Location                                                        |
+| --------------------------------------------- | ------ | --------------------------------------------------------------- |
+| AlertContext type definitions                 | Done   | `packages/shared/src/alertContext/types.ts`                     |
+| Alert context truncation cascade              | Done   | `packages/shared/src/alertContext/truncation.ts`                |
+| Alert budget quota (per-tenant limits)        | Done   | `packages/shared/src/queue/alertBudgetQuota.ts`                 |
+| Diagnostics framework (taxonomy, correlation) | Done   | `packages/shared/src/diagnostics/`                              |
+| Sentry adapter (alert + context)              | Done   | `services/incident-triage/src/adapters/sentry*.ts`              |
+| PagerDuty adapter                             | Done   | `services/incident-triage/src/adapters/pagerDuty*.ts`           |
+| OpsGenie adapter (alert + context)            | Done   | `services/incident-triage/src/adapters/opsgenie*.ts`            |
+| New Relic adapter (alert + context)           | Done   | `services/incident-triage/src/adapters/newRelic*.ts`            |
+| Datadog monitoring adapter                    | Done   | `services/incident-triage/src/adapters/datadogAdapter.ts`       |
+| Grafana monitoring adapter                    | Done   | `services/incident-triage/src/adapters/grafanaAdapter.ts`       |
+| Prometheus monitoring adapter                 | Done   | `services/incident-triage/src/adapters/prometheusAdapter.ts`    |
+| Alert analysis service                        | Done   | `services/incident-triage/src/services/alertAnalysisService.ts` |
+| Webhook routes (all providers)                | Done   | `services/incident-triage/src/routes/webhookRoutes.ts`          |
+| Webhook verification middleware               | Done   | `services/incident-triage/src/middleware/verify*.ts`            |
+| CircleCI integration (CI pipeline)            | Done   | `services/github-app/src/adapters/circleci*.ts`                 |
 
 ### Phase 3: Advanced capabilities — PLANNED
 

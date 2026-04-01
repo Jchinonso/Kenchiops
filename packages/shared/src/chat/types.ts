@@ -32,6 +32,53 @@ export interface ChatPageContext {
 /** Pages that support the Copilot Drawer. */
 export type ChatPageType = "analysis" | "incident" | "knowledge-base" | "overview" | "failures";
 
+/**
+ * A RAG source document surfaced during chat.
+ */
+export interface ChatRAGSource {
+  readonly title: string;
+  readonly docType: string;
+  readonly similarity: number;
+}
+
+// ==================== Investigation Types ====================
+
+/**
+ * Structured diagnosis from the investigation pipeline.
+ * Sent to the frontend via the investigation_result SSE event.
+ *
+ * Note: The upstream SuggestedInvestigationAction includes a `reasoning` field —
+ * intentionally omitted here to avoid bloating the SSE payload.
+ * Reasoning is embedded in the formattedContext for the LLM prompt.
+ */
+export interface ChatInvestigationDiagnosis {
+  readonly summary: string;
+  readonly rootCauseHypothesis: string;
+  readonly confidence: number;
+  readonly suggestedActions: ReadonlyArray<{
+    readonly action: string;
+    readonly priority: "immediate" | "short_term" | "long_term";
+  }>;
+  readonly evidenceSources: ReadonlyArray<string>;
+}
+
+/**
+ * Result of running the investigation pipeline for chat context enrichment.
+ * Contains the full investigation output formatted for prompt injection.
+ */
+export interface ChatInvestigationResult {
+  /** Formatted markdown section for the system prompt */
+  readonly formattedContext: string;
+  /** Structured diagnosis for potential frontend display */
+  readonly diagnosis: ChatInvestigationDiagnosis | null;
+  /** Evidence items surfaced during investigation */
+  readonly evidenceCount: number;
+  /** Whether the investigation completed successfully */
+  readonly success: boolean;
+}
+
+// ==================== Stream Chunk Types ====================
+
 /** Types of chunks emitted during a streamed chat response. */
 export type ChatStreamChunkType =
   | "token"
@@ -39,7 +86,9 @@ export type ChatStreamChunkType =
   | "error"
   | "rag_sources"
   | "conversation_created"
-  | "budget_warning";
+  | "budget_warning"
+  | "investigation_started"
+  | "investigation_result";
 
 /**
  * A single chunk in a streamed chat response.
@@ -51,16 +100,12 @@ export type ChatStreamChunk =
   | { readonly type: "error"; readonly error: string }
   | { readonly type: "conversation_created"; readonly conversationId: string }
   | { readonly type: "rag_sources"; readonly sources: ReadonlyArray<ChatRAGSource> }
-  | { readonly type: "budget_warning"; readonly ratioUsed: number; readonly remaining: number };
-
-/**
- * A RAG source document surfaced during chat.
- */
-export interface ChatRAGSource {
-  readonly title: string;
-  readonly docType: string;
-  readonly similarity: number;
-}
+  | { readonly type: "budget_warning"; readonly ratioUsed: number; readonly remaining: number }
+  | { readonly type: "investigation_started" }
+  | {
+      readonly type: "investigation_result";
+      readonly diagnosis: ChatInvestigationDiagnosis | null;
+    };
 
 // ==================== Port Interfaces ====================
 
@@ -123,6 +168,20 @@ export interface ChatContextPort {
     tenantId: string,
     context: import("../core/types.js").RequestContext
   ) => Promise<ChatRAGResult>;
+  /**
+   * Run the full investigation pipeline for an incident.
+   * Optional — returns null if investigation is not configured or fails.
+   * Must not throw — always degrades gracefully.
+   *
+   * Accepts `userMessage` for intent parsing (symptom, service, time range).
+   * This is a departure from other context port methods which only need entityId.
+   */
+  readonly investigateIncident?: (
+    userMessage: string,
+    alertId: string,
+    tenantId: string,
+    context: import("../core/types.js").RequestContext
+  ) => Promise<ChatInvestigationResult | null>;
 }
 
 /** Structured context data fetched for a page entity. */
@@ -285,6 +344,8 @@ export interface CompletionPipeline {
   readonly ragSources: ReadonlyArray<ChatRAGSource>;
   readonly ragContextUsed: boolean;
   readonly logMetadata: Readonly<Record<string, unknown>>;
+  /** Investigation result for incident pages (null if not applicable or failed). */
+  readonly investigationResult?: ChatInvestigationResult | null;
 }
 
 /** Result of ensuring a conversation exists. */

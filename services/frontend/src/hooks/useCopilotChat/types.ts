@@ -25,12 +25,32 @@ export type ChatStreamChunk =
   | { readonly type: "error"; readonly error: string }
   | { readonly type: "conversation_created"; readonly conversationId: string }
   | { readonly type: "rag_sources"; readonly sources: ReadonlyArray<ChatRAGSource> }
-  | { readonly type: "budget_warning"; readonly ratioUsed: number; readonly remaining: number };
+  | { readonly type: "budget_warning"; readonly ratioUsed: number; readonly remaining: number }
+  | { readonly type: "investigation_started" }
+  | {
+      readonly type: "investigation_result";
+      readonly diagnosis: ChatInvestigationDiagnosis | null;
+    };
 
 export interface ChatRAGSource {
   readonly title: string;
   readonly docType: string;
   readonly similarity: number;
+}
+
+/**
+ * Structured diagnosis from the investigation pipeline.
+ * SYNC: Mirrors ChatInvestigationDiagnosis from packages/shared/src/chat/types.ts
+ */
+export interface ChatInvestigationDiagnosis {
+  readonly summary: string;
+  readonly rootCauseHypothesis: string;
+  readonly confidence: number;
+  readonly suggestedActions: ReadonlyArray<{
+    readonly action: string;
+    readonly priority: "immediate" | "short_term" | "long_term";
+  }>;
+  readonly evidenceSources: ReadonlyArray<string>;
 }
 
 // ==================== Page Context ====================
@@ -68,6 +88,8 @@ export interface UseCopilotChatResult {
   readonly ragSources: ReadonlyArray<ChatRAGSource>;
   readonly budgetWarning: BudgetWarning | null;
   readonly isCooldown: boolean;
+  readonly isInvestigating: boolean;
+  readonly investigationDiagnosis: ChatInvestigationDiagnosis | null;
   readonly sendMessage: (text: string) => void;
   readonly clearConversation: () => void;
   readonly loadConversation: (id: string) => void;

@@ -37,11 +37,16 @@ export type {
   FinalizeCompletionInput,
 } from "./types.js";
 
-export type { ChatService, ChatTokenUsageRepositoryPort } from "./types.js";
+export type {
+  ChatService,
+  ChatTokenUsageRepositoryPort,
+  ChatInvestigationResult,
+  ChatInvestigationDiagnosis,
+} from "./types.js";
 
 export { createChatService } from "./chatService.js";
 
-export { fetchPageContext, fetchRAGContext } from "./chatContext.js";
+export { fetchPageContext, fetchRAGContext, fetchInvestigationContext } from "./chatContext.js";
 
 export {
   ensureConversation,
@@ -63,6 +68,7 @@ export { checkBudgetGuard, incrementBudgetSafe } from "./chatBudgetGuard.js";
 export {
   estimateTokens as estimateChatTokens,
   buildSystemPrompt as buildChatSystemPrompt,
+  formatInvestigationSection as formatChatInvestigationSection,
   buildLLMMessages as buildChatLLMMessages,
   trimMessagesToFit as trimChatMessagesToFit,
   deriveTitle as deriveChatTitle,

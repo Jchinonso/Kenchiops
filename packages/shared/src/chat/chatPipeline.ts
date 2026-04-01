@@ -19,7 +19,7 @@ import {
   buildLLMMessages,
   trimMessagesToFit,
 } from "./helpers.js";
-import { fetchPageContext, fetchRAGContext } from "./chatContext.js";
+import { fetchPageContext, fetchRAGContext, fetchInvestigationContext } from "./chatContext.js";
 
 const logger = createLogger("chat-pipeline");
 
@@ -51,25 +51,23 @@ const buildFullPipeline = async (
   history: ReadonlyArray<{ readonly role: string; readonly content: string }>,
   context: RequestContext
 ): Promise<CompletionPipeline> => {
-  // Fetch page context + initial RAG in parallel (both fail-safe)
-  const [pageContextData, initialRag] = await Promise.all([
+  // Fetch page context + investigation in parallel (all fail-safe)
+  const [pageContextData, investigationResult] = await Promise.all([
     fetchPageContext(contextPort, input.pageContext, input.tenantId, context),
-    fetchRAGContext(contextPort, input.userMessage, null, input.tenantId, context),
+    fetchInvestigationContext(contextPort, input, context),
   ]);
 
-  // Re-run RAG with enriched query if page context was found
-  const ragResult = pageContextData
-    ? await fetchRAGContext(
-        contextPort,
-        input.userMessage,
-        pageContextData,
-        input.tenantId,
-        context
-      )
-    : initialRag;
+  // Fetch RAG after page context resolves so it can enrich the query
+  const ragResult = await fetchRAGContext(
+    contextPort,
+    input.userMessage,
+    pageContextData,
+    input.tenantId,
+    context
+  );
 
   const ragSources = extractRAGSources(ragResult);
-  const systemPrompt = buildSystemPrompt(pageContextData, ragResult);
+  const systemPrompt = buildSystemPrompt(pageContextData, ragResult, investigationResult);
   const rawMessages = buildLLMMessages(systemPrompt, history, input.userMessage);
   const messages = trimMessagesToFit(rawMessages, CHAT_DEFAULTS.MAX_CONTEXT_TOKENS);
 
@@ -77,10 +75,12 @@ const buildFullPipeline = async (
     messages,
     ragSources,
     ragContextUsed: ragSources.length > 0 || pageContextData !== null,
+    investigationResult,
     logMetadata: {
       conversationId,
       hasPageContext: pageContextData !== null,
       ragSourceCount: ragSources.length,
+      hasInvestigation: investigationResult?.success ?? false,
     },
   };
 };

@@ -985,7 +985,6 @@ export interface Config {
   // Feature Flags
   /** Enable simplified CI analysis pipeline (Phase 1 of pipeline simplification) */
   readonly SIMPLIFIED_PIPELINE_ENABLED?: boolean;
-
   // Service URLs (for inter-service communication)
   readonly API_URL: string;
   readonly SLACK_BOT_URL: string;
