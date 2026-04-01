@@ -16,6 +16,7 @@ import type {
   CopilotMessage,
   ChatRAGSource,
   ChatStreamChunk,
+  ChatInvestigationDiagnosis,
   ConversationMessageResponse,
   UseCopilotChatResult,
   BudgetWarning,
@@ -140,6 +141,9 @@ export const useCopilotChat = (): UseCopilotChatResult => {
   const [ragSources, setRagSources] = useState<readonly ChatRAGSource[]>([]);
   const [budgetWarning, setBudgetWarning] = useState<BudgetWarning | null>(null);
   const [isCooldown, setIsCooldown] = useState(false);
+  const [isInvestigating, setIsInvestigating] = useState(false);
+  const [investigationDiagnosis, setInvestigationDiagnosis] =
+    useState<ChatInvestigationDiagnosis | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -175,6 +179,8 @@ export const useCopilotChat = (): UseCopilotChatResult => {
 
       setError(null);
       setBudgetWarning(null);
+      setIsInvestigating(false);
+      setInvestigationDiagnosis(null);
 
       const userMessage = createUserMessage(trimmed);
       const assistantPlaceholder = createAssistantPlaceholder();
@@ -243,13 +249,19 @@ export const useCopilotChat = (): UseCopilotChatResult => {
               } else if (chunk.type === "conversation_created") {
                 setConversationId(chunk.conversationId);
               } else if (chunk.type === "error") {
+                setIsInvestigating(false);
                 setError(truncateErrorText(chunk.error));
               } else if (chunk.type === "rag_sources") {
                 setRagSources(chunk.sources);
               } else if (chunk.type === "budget_warning") {
                 setBudgetWarning({ ratioUsed: chunk.ratioUsed, remaining: chunk.remaining });
+              } else if (chunk.type === "investigation_started") {
+                setIsInvestigating(true);
+              } else if (chunk.type === "investigation_result") {
+                setIsInvestigating(false);
+                setInvestigationDiagnosis(chunk.diagnosis);
               } else if (chunk.type === "done") {
-                // Stream complete — no action needed, cleanup below
+                setIsInvestigating(false);
               }
             }
           }
@@ -257,6 +269,7 @@ export const useCopilotChat = (): UseCopilotChatResult => {
           // AbortError is expected when the user navigates away or sends a new message
           const isAbort = thrown instanceof DOMException && thrown.name === "AbortError";
           if (isAbort) {
+            setIsInvestigating(false);
             return;
           }
           const errorMessage =
@@ -291,6 +304,8 @@ export const useCopilotChat = (): UseCopilotChatResult => {
     setRagSources([]);
     setBudgetWarning(null);
     setIsCooldown(false);
+    setIsInvestigating(false);
+    setInvestigationDiagnosis(null);
   }, []);
 
   const loadConversation = useCallback((id: string): void => {
@@ -300,6 +315,8 @@ export const useCopilotChat = (): UseCopilotChatResult => {
     setError(null);
     setIsStreaming(false);
     setRagSources([]);
+    setIsInvestigating(false);
+    setInvestigationDiagnosis(null);
 
     const fetchMessages = async (): Promise<void> => {
       try {
@@ -338,6 +355,8 @@ export const useCopilotChat = (): UseCopilotChatResult => {
     ragSources,
     budgetWarning,
     isCooldown,
+    isInvestigating,
+    investigationDiagnosis,
     sendMessage,
     clearConversation,
     loadConversation,

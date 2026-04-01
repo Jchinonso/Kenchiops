@@ -22,6 +22,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { RAGSourceList } from "./RAGSourceList";
 import { ConversationList } from "./ConversationList";
+import { InvestigationCard } from "./InvestigationCard";
 
 interface CopilotDrawerProps {
   readonly open: boolean;
@@ -37,6 +38,8 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
     ragSources,
     budgetWarning,
     isCooldown,
+    isInvestigating,
+    investigationDiagnosis,
     sendMessage,
     clearConversation,
     loadConversation,
@@ -148,6 +151,14 @@ export const CopilotDrawer = ({ open, onOpenChange }: CopilotDrawerProps) => {
               <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
                 {error}
               </div>
+            )}
+
+            {/* Investigation results card */}
+            {(isInvestigating || investigationDiagnosis) && (
+              <InvestigationCard
+                isInvestigating={isInvestigating}
+                diagnosis={investigationDiagnosis}
+              />
             )}
 
             {/* Messages */}

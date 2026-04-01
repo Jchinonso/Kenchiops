@@ -8,7 +8,13 @@
  */
 
 import { CHAT_DEFAULTS } from "../constants/api.js";
-import type { ChatLLMMessage, ChatContextData, ChatRAGResult, ChatRAGSource } from "./types.js";
+import type {
+  ChatLLMMessage,
+  ChatContextData,
+  ChatRAGResult,
+  ChatRAGSource,
+  ChatInvestigationResult,
+} from "./types.js";
 
 // ==================== System Prompt ====================
 
@@ -237,17 +243,37 @@ const formatPageContextSection = (data: ChatContextData): string => {
 };
 
 /**
+ * Formats investigation results into a system prompt section.
+ * Returns empty string for failed or empty results.
+ */
+export const formatInvestigationSection = (result: ChatInvestigationResult): string => {
+  if (!result.success || !result.formattedContext) {
+    return "";
+  }
+  return result.formattedContext;
+};
+
+/**
  * Builds a context-enriched system prompt from the base prompt,
- * optional page context data, and optional RAG results.
+ * optional page context data, optional RAG results, and optional investigation results.
+ *
+ * Ordering: base prompt → static alert context → investigation → RAG docs.
+ * Investigation sits between alert data (scene-setting) and RAG (supplementary reference).
  */
 export const buildSystemPrompt = (
   pageContextData: ChatContextData | null,
-  ragResult: ChatRAGResult | null
+  ragResult: ChatRAGResult | null,
+  investigationResult?: ChatInvestigationResult | null
 ): string => {
   const formattedContext = ragResult ? ragResult.formattedContext : "";
+  const investigationSection = investigationResult
+    ? formatInvestigationSection(investigationResult)
+    : "";
+
   const sections: readonly string[] = [
     BASE_SYSTEM_PROMPT,
     ...(pageContextData ? [formatPageContextSection(pageContextData)] : []),
+    ...(investigationSection.length > 0 ? [investigationSection] : []),
     ...(formattedContext.length > 0 ? [formattedContext] : []),
   ];
 

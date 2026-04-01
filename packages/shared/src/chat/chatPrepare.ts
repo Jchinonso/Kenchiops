@@ -74,12 +74,20 @@ export const prepareCompletion = async (
     context
   );
 
-  // Build pre-stream chunks immutably (at most 3 elements)
+  // Build pre-stream chunks immutably
   const preStreamChunks: readonly ChatStreamChunk[] = [
     ...(conversationResult.isNew
       ? [{ type: "conversation_created" as const, conversationId }]
       : []),
     ...(budgetResult.warning ? [budgetResult.warning] : []),
+    ...(pipeline.investigationResult !== undefined
+      ? [
+          {
+            type: "investigation_result" as const,
+            diagnosis: pipeline.investigationResult?.diagnosis ?? null,
+          },
+        ]
+      : []),
     ...(pipeline.ragSources.length > 0
       ? [{ type: "rag_sources" as const, sources: pipeline.ragSources }]
       : []),

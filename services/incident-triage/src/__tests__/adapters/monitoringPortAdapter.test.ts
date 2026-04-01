@@ -103,20 +103,13 @@ describe("createMonitoringPort", () => {
       expect(adapter2.fetchEvidence).not.toHaveBeenCalled();
     });
 
-    it("should log skip message when no adapters are configured", async () => {
+    it("should return empty array when no adapters are configured", async () => {
       const port = createMonitoringPort([createMockAdapter("datadog", false)]);
       const query = createTestQuery();
 
-      await port.gatherMetrics(query, testContext);
+      const result = await port.gatherMetrics(query, testContext);
 
-      const loggerInstance = mockLoggerInstance;
-      expect(loggerInstance.info).toHaveBeenCalledWith(
-        "No monitoring adapters configured, skipping",
-        expect.objectContaining({
-          requestId: "test-request-id",
-          tenantId: "test-tenant",
-        })
-      );
+      expect(result).toEqual([]);
     });
 
     it("should only call configured adapters", async () => {
@@ -188,27 +181,25 @@ describe("createMonitoringPort", () => {
       expect(result).toEqual([]);
     });
 
-    it("should log adapter count and names when active adapters exist", async () => {
+    it("should only call configured adapters when mixed with unconfigured", async () => {
+      const configuredAdapter1 = createMockAdapter("datadog", true, []);
+      const configuredAdapter2 = createMockAdapter("grafana", true, []);
+      const unconfiguredAdapter = createMockAdapter("pagerduty", false);
       const port = createMonitoringPort([
-        createMockAdapter("datadog", true, []),
-        createMockAdapter("grafana", true, []),
-        createMockAdapter("pagerduty", false),
+        configuredAdapter1,
+        configuredAdapter2,
+        unconfiguredAdapter,
       ]);
       const query = createTestQuery();
 
       await port.gatherMetrics(query, testContext);
 
-      const loggerInstance = mockLoggerInstance;
-      expect(loggerInstance.info).toHaveBeenCalledWith(
-        "Gathering monitoring evidence",
-        expect.objectContaining({
-          activeAdapterCount: 2,
-          adapterNames: ["datadog", "grafana"],
-        })
-      );
+      expect(configuredAdapter1.fetchEvidence).toHaveBeenCalled();
+      expect(configuredAdapter2.fetchEvidence).toHaveBeenCalled();
+      expect(unconfiguredAdapter.fetchEvidence).not.toHaveBeenCalled();
     });
 
-    it("should log total evidence count after gathering", async () => {
+    it("should return combined evidence from all configured adapters", async () => {
       const ddEvidence = [
         createTestEvidence("dd-1", "datadog_metrics"),
         createTestEvidence("dd-2", "datadog_events"),
@@ -216,16 +207,10 @@ describe("createMonitoringPort", () => {
       const port = createMonitoringPort([createMockAdapter("datadog", true, ddEvidence)]);
       const query = createTestQuery();
 
-      await port.gatherMetrics(query, testContext);
+      const result = await port.gatherMetrics(query, testContext);
 
-      const loggerInstance = mockLoggerInstance;
-      expect(loggerInstance.info).toHaveBeenCalledWith(
-        "Monitoring evidence gathered",
-        expect.objectContaining({
-          activeAdapterCount: 1,
-          totalEvidence: 2,
-        })
-      );
+      expect(result).toHaveLength(2);
+      expect(result).toEqual(ddEvidence);
     });
 
     it("should pass the query object to each adapter unchanged", async () => {

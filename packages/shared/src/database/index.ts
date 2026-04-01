@@ -426,6 +426,7 @@ export {
   createTriageResult,
   getTriageResultById,
   getTriageResultByAlertId,
+  getTriageResultsByAlertIds,
   updateTriageEnrichment,
   updateTriageAiSummary,
   updateTriageDispatchResults,

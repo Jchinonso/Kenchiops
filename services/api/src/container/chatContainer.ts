@@ -23,11 +23,28 @@ import {
   updateConversationTitle,
   countConversationsByUser,
   countMessagesByConversation,
+  config,
+  createLogger,
+  createInvestigationService,
+  createMonitoringPort,
+  createInvestigationSearchAdapter,
+  createLLMCompletionAdapter,
+  createDatadogMonitoringAdapter,
+  createGrafanaMonitoringAdapter,
+  createPrometheusMonitoringAdapter,
+  createPagerDutyMonitoringAdapter,
+  createVercelMonitoringAdapter,
+  createNetlifyMonitoringAdapter,
   type ChatRepositoryPort,
   type ChatService,
+  type MonitoringAdapter,
 } from "@kenchi/shared";
 import { createChatLLMAdapter } from "../adapters/chatLLMAdapter.js";
 import { createChatContextAdapter } from "../adapters/chatContextAdapter.js";
+import {
+  createChatInvestigationAdapter,
+  type ChatInvestigationAdapter,
+} from "../adapters/chatInvestigationAdapter.js";
 
 // ==================== Repository Port Adapter ====================
 
@@ -81,14 +98,79 @@ export const getChatContainer = (): ChatContainer => {
   return chatContainerInstance;
 };
 
+const containerLogger = createLogger("chat-container");
+
+/**
+ * Creates the investigation adapter only if at least one monitoring
+ * provider is configured. Returns undefined otherwise for graceful degradation.
+ */
+const createInvestigationAdapterIfConfigured = (): ChatInvestigationAdapter | undefined => {
+  const monitoringAdapters: readonly MonitoringAdapter[] = [
+    ...(config.DATADOG_API_KEY && config.DATADOG_APP_KEY
+      ? [
+          createDatadogMonitoringAdapter(
+            config.DATADOG_API_KEY,
+            config.DATADOG_APP_KEY,
+            config.DATADOG_API_BASE_URL ?? "https://api.datadoghq.com"
+          ),
+        ]
+      : []),
+    ...(config.PAGERDUTY_API_TOKEN
+      ? [createPagerDutyMonitoringAdapter(config.PAGERDUTY_API_TOKEN)]
+      : []),
+    ...(config.GRAFANA_API_TOKEN
+      ? [
+          createGrafanaMonitoringAdapter(
+            config.GRAFANA_API_TOKEN,
+            config.GRAFANA_API_BASE_URL ?? ""
+          ),
+        ]
+      : []),
+    ...(config.PROMETHEUS_API_BASE_URL
+      ? [createPrometheusMonitoringAdapter(config.PROMETHEUS_API_BASE_URL)]
+      : []),
+    ...(config.VERCEL_API_TOKEN
+      ? [createVercelMonitoringAdapter(config.VERCEL_API_TOKEN, config.VERCEL_TEAM_ID ?? "")]
+      : []),
+    ...(config.NETLIFY_API_TOKEN
+      ? [createNetlifyMonitoringAdapter(config.NETLIFY_API_TOKEN, config.NETLIFY_SITE_ID ?? "")]
+      : []),
+  ];
+
+  const configuredCount = monitoringAdapters.length;
+  if (configuredCount === 0) {
+    containerLogger.info("No monitoring adapters configured — investigation disabled");
+    return undefined;
+  }
+
+  containerLogger.info("Investigation pipeline enabled", {
+    configuredAdapters: configuredCount,
+  });
+
+  const monitoringPort = createMonitoringPort(monitoringAdapters);
+  const llmCompletionPort = createLLMCompletionAdapter();
+  const investigationSearchPort = createInvestigationSearchAdapter();
+
+  const investigationService = createInvestigationService(
+    llmCompletionPort,
+    investigationSearchPort,
+    monitoringPort,
+    { llmModel: config.TRIAGE_LLM_MODEL || undefined }
+  );
+
+  return createChatInvestigationAdapter(investigationService);
+};
+
 /**
  * Creates the chat container with all dependencies wired.
  */
 const createChatContainer = (): ChatContainer => {
+  const investigationAdapter = createInvestigationAdapterIfConfigured();
+
   const chatService = createChatService({
     chatRepository: chatRepositoryAdapter,
     llmPort: createChatLLMAdapter(),
-    contextPort: createChatContextAdapter(),
+    contextPort: createChatContextAdapter(investigationAdapter),
     budgetPort: {
       checkBudget: checkChatBudget,
       incrementUsage: incrementChatTokenUsage,

@@ -142,6 +142,38 @@ export const getTriageResultByAlertId = async (
 };
 
 /**
+ * Retrieves triage results for multiple alert IDs in a single query.
+ * Uses ANY($1) for efficient batch lookup instead of N individual queries.
+ *
+ * @param alertIds - Array of incident alert IDs
+ * @param tenantId - Tenant to scope the query
+ * @returns Array of triage result records (may be fewer than alertIds if some have no triage)
+ */
+export const getTriageResultsByAlertIds = async (
+  alertIds: readonly string[],
+  tenantId: string
+): Promise<readonly IncidentTriageResultRecord[]> => {
+  if (alertIds.length === 0) {
+    return [];
+  }
+
+  try {
+    const result = await query<IncidentTriageResultRow>(
+      INCIDENT_TRIAGE_RESULT_QUERIES.GET_BY_ALERT_IDS,
+      [[...alertIds], tenantId]
+    );
+    return result.rows.map(mapRowToTriageResult);
+  } catch (error) {
+    logger.error("Failed to get triage results by alert ids", {
+      alertIdCount: alertIds.length,
+      tenantId,
+      error: getErrorMessage(error),
+    });
+    throw error;
+  }
+};
+
+/**
  * Updates a triage result with Phase 3 enrichment data (runbooks, correlations, evidence).
  *
  * @param input - The enrichment data to update

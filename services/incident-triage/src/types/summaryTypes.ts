@@ -7,7 +7,7 @@
  * @module types/summaryTypes
  */
 
-import type { RequestContext } from "@kenchi/shared";
+import type { RequestContext, LLMCompletionOptions, LLMCompletionPort } from "@kenchi/shared";
 import type { EvidenceCatalog } from "./evidenceTypes.js";
 import type { NormalizedAlert } from "./incidentTypes.js";
 import type { SeverityScore } from "./severityTypes.js";
@@ -68,28 +68,9 @@ export interface SummaryValidationResult {
 
 // ==================== LLM Completion Port ====================
 
-/**
- * Options for an LLM completion call.
- */
-export interface LLMCompletionOptions {
-  readonly model: string;
-  readonly timeoutMs: number;
-  readonly temperature?: number;
-  readonly maxTokens?: number;
-}
-
-/**
- * Port interface for LLM text completion.
- * Keeps the OpenAI SDK out of the service layer.
- */
-export interface LLMCompletionPort {
-  readonly complete: (
-    systemPrompt: string,
-    userPrompt: string,
-    options: LLMCompletionOptions,
-    context: RequestContext
-  ) => Promise<string>;
-}
+// Re-exported from @kenchi/shared — canonical definitions live in
+// packages/shared/src/investigation/types.ts
+export type { LLMCompletionOptions, LLMCompletionPort };
 
 // ==================== Fallback Summary Input ====================
 

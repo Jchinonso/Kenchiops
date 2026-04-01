@@ -212,6 +212,7 @@ export const config: Config = {
 
   // Feature Flags
   SIMPLIFIED_PIPELINE_ENABLED: optionalBool("SIMPLIFIED_PIPELINE_ENABLED"),
+  CHAT_INVESTIGATION_ENABLED: optionalBool("CHAT_INVESTIGATION_ENABLED"),
 
   // Service URLs
   API_URL: optionalString("API_URL", CONFIG_DEFAULTS.API_URL),

@@ -67,6 +67,16 @@ export const streamCompletion = async function* (
   let { conversationId } = input; // let: needed in catch block after creation
 
   try {
+    // Emit investigation_started early so frontend can show skeleton loading card.
+    const shouldInvestigate =
+      input.pageContext.pageType === "incident" &&
+      input.pageContext.entityId &&
+      deps.contextPort?.investigateIncident;
+
+    if (shouldInvestigate) {
+      yield { type: "investigation_started" };
+    }
+
     // Phase 1: Prepare (conversation, budget, history, pipeline)
     const prepared = await prepareCompletion(
       deps.chatRepository,
