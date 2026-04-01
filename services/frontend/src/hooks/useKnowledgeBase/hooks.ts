@@ -8,6 +8,7 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { fetchQuery, fetchMutation, fetchMutationVoid } from "@/lib/fetchQuery";
+import { API_URL as API_BASE } from "@/lib/apiClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { useToFetchResult, type UseFetchResult, type MutationState } from "@/hooks/useQueryCompat";
 import type {

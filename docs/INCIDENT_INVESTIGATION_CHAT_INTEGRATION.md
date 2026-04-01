@@ -18,7 +18,7 @@ The investigation pipeline:
 3. Correlates evidence deterministically (timeline, patterns, common factors)
 4. Produces an LLM-powered diagnosis with root cause hypothesis and suggested actions
 
-The integration is feature-flagged via `CHAT_INVESTIGATION_ENABLED` and degrades gracefully at every layer. If investigation fails, the chat response falls back to static alert metadata + RAG context.
+Investigation is enabled automatically when at least one monitoring provider is configured (via `chatContainer.ts`). No feature flag is needed -- the presence of `contextPort.investigateIncident` is the gate. The integration degrades gracefully at every layer. If investigation fails, the chat response falls back to static alert metadata + RAG context.
 
 ---
 
@@ -49,7 +49,7 @@ POST /api/v1/chat/completions
     v
 chatStreaming.streamCompletion(deps, input, context)
     |
-    |-- Emit `investigation_started` SSE event (if feature flag on + incident page)
+    |-- Emit `investigation_started` SSE event (if incident page + investigateIncident configured)
     |
     |-- Phase 1: chatPrepare.prepareCompletion()
     |     |-- checkBudgetGuard()
@@ -57,31 +57,34 @@ chatStreaming.streamCompletion(deps, input, context)
     |     |-- loadHistoryAndSaveUserMessage()
     |     +-- buildCompletionPipeline()                   [chatPipeline.ts]
     |           +-- buildFullPipeline()
-    |                 |-- [parallel] fetchPageContext()    [chatContext.ts]
-    |                 |       -> DB lookup: getAlertById()
-    |                 |       -> Returns: { title, description, severity, status, serviceName, environment }
     |                 |
-    |                 |-- [parallel] fetchRAGContext()     [chatContext.ts]
-    |                 |       -> Vector search on knowledge base
-    |                 |       -> Returns: formatted docs + citations
+    |                 |-- [parallel] Promise.all:
+    |                 |     |-- fetchPageContext()          [chatContext.ts]
+    |                 |     |     -> DB lookup: getAlertById()
+    |                 |     |     -> Returns: { title, description, severity, status, serviceName, environment }
+    |                 |     |
+    |                 |     +-- fetchInvestigationContext() [chatContext.ts]
+    |                 |           |
+    |                 |           +-- contextPort.investigateIncident()
+    |                 |                 |-- investigationService.parseIntent(userMessage)
+    |                 |                 |       -> LLM extracts: symptom, service, time range
+    |                 |                 |
+    |                 |                 |-- investigationService.gatherEvidence(intent, tenantId)
+    |                 |                 |       -> [parallel] 3 DB sources + 6 monitoring providers
+    |                 |                 |       -> Returns: top 20 evidence items by relevance
+    |                 |                 |
+    |                 |                 |-- investigationService.correlateEvidence(evidence, intent)
+    |                 |                 |       -> Deterministic: timeline, patterns, related services
+    |                 |                 |
+    |                 |                 +-- investigationService.diagnose(intent, evidence, correlation)
+    |                 |                         -> LLM diagnosis: root cause, confidence, actions
+    |                 |           |
+    |                 |           -> Returns: ChatInvestigationResult
     |                 |
-    |                 +-- [parallel] fetchInvestigationContext()  [chatContext.ts]
-    |                         |
-    |                         +-- contextPort.investigateIncident()
-    |                               |-- investigationService.parseIntent(userMessage)
-    |                               |       -> LLM extracts: symptom, service, time range
-    |                               |
-    |                               |-- investigationService.gatherEvidence(intent, tenantId)
-    |                               |       -> [parallel] 3 DB sources + 6 monitoring providers
-    |                               |       -> Returns: top 20 evidence items by relevance
-    |                               |
-    |                               |-- investigationService.correlateEvidence(evidence, intent)
-    |                               |       -> Deterministic: timeline, patterns, related services
-    |                               |
-    |                               +-- investigationService.diagnose(intent, evidence, correlation)
-    |                                       -> LLM diagnosis: root cause, confidence, actions
-    |                         |
-    |                         -> Returns: ChatInvestigationResult
+    |                 |-- [sequential] fetchRAGContext()    [chatContext.ts]
+    |                 |     -> Enriches RAG query with page context data
+    |                 |     -> Vector search on knowledge base
+    |                 |     -> Returns: formatted docs + citations
     |                 |
     |                 v
     |           buildSystemPrompt(staticAlertData, ragDocs, investigationResult)
@@ -113,14 +116,14 @@ chatStreaming.streamCompletion(deps, input, context)
 | File                                   | Role                                                                                                                                                                                                                   |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `chat/types.ts`                        | `ChatInvestigationResult`, `ChatInvestigationDiagnosis`, `ChatContextPort.investigateIncident`, `ChatStreamChunk` variants (`investigation_started`, `investigation_result`), `CompletionPipeline.investigationResult` |
-| `chat/chatContext.ts`                  | `fetchInvestigationContext()` -- fail-safe wrapper, checks feature flag + page type + port availability                                                                                                                |
-| `chat/chatPipeline.ts`                 | `buildFullPipeline()` -- 3-way `Promise.all` running page context, RAG, and investigation in parallel                                                                                                                  |
-| `chat/chatStreaming.ts`                | `streamCompletion()` -- emits `investigation_started` SSE event before prepare phase for incident pages                                                                                                                |
+| `chat/chatContext.ts`                  | `fetchInvestigationContext()` -- fail-safe wrapper, checks page type + port availability (no feature flag -- presence of `investigateIncident` method is the gate)                                                     |
+| `chat/chatPipeline.ts`                 | `buildFullPipeline()` -- 2-way `Promise.all` (page context + investigation in parallel), then sequential RAG fetch (enriched with page context)                                                                        |
+| `chat/chatStreaming.ts`                | `streamCompletion()` -- emits `investigation_started` SSE event before prepare phase when incident page + `investigateIncident` configured                                                                             |
 | `chat/chatPrepare.ts`                  | `prepareCompletion()` -- includes `investigation_result` in pre-stream chunks when pipeline has diagnosis                                                                                                              |
 | `chat/helpers.ts`                      | `formatInvestigationSection()`, `buildSystemPrompt()` with optional investigation parameter                                                                                                                            |
 | `constants/api.ts`                     | `CHAT_DEFAULTS.MAX_INVESTIGATION_CONTEXT_TOKENS` (4,000), `MAX_INVESTIGATION_EVIDENCE_IN_PROMPT` (10), `MAX_INVESTIGATION_EVIDENCE_SUMMARY_LENGTH` (200)                                                               |
-| `core/config.ts`                       | `CHAT_INVESTIGATION_ENABLED` -- `optionalBool("CHAT_INVESTIGATION_ENABLED")`                                                                                                                                           |
-| `core/types.ts`                        | `Config.CHAT_INVESTIGATION_ENABLED?: boolean`                                                                                                                                                                          |
+| `core/config.ts`                       | No investigation-specific config -- investigation is auto-enabled based on monitoring provider credentials                                                                                                             |
+| `core/types.ts`                        | No investigation-specific config type -- `CHAT_INVESTIGATION_ENABLED` was removed as dead code                                                                                                                         |
 | `investigation/service.ts`             | `createInvestigationService()` factory -- orchestrates parseIntent, gatherEvidence, correlateEvidence, diagnose                                                                                                        |
 | `investigation/types.ts`               | `InvestigationService`, `InvestigationIntent`, `InvestigationEvidenceItem`, `InvestigationCorrelation`, `InvestigationDiagnosis`, `InvestigationSearchPort`, `LLMCompletionPort`, `INVESTIGATION_LLM_TIMEOUT_MS` (45s) |
 | `investigation/monitoringPort.ts`      | `createMonitoringPort()` -- fans out to all configured adapters with bounded concurrency                                                                                                                               |
@@ -278,7 +281,7 @@ There is no single outer `Promise.race` wrapping the investigation pipeline. The
 
 The `fetchInvestigationContext` wrapper in `chatContext.ts` has a try/catch but no timeout of its own. Adding an outer `Promise.race` with a total budget (e.g., 60s) would cap worst-case latency and is a recommended improvement.
 
-Investigation runs in the first `Promise.all` alongside page context and initial RAG. It does not add to the critical path unless it exceeds the combined page context + RAG fetch time (~1-2s). In practice, investigation is typically the bottleneck, adding ~3-10s of latency before the first LLM token.
+Investigation runs in the first `Promise.all` alongside page context (but not RAG -- RAG runs sequentially after page context to enable query enrichment). Investigation does not add to the critical path unless it exceeds the combined page context + sequential RAG fetch time (~1-2s). In practice, investigation is typically the bottleneck, adding ~3-10s of latency before the first LLM token.
 
 The `investigation_started` SSE event provides immediate feedback via a skeleton loading card, so the user sees activity while waiting.
 
@@ -303,7 +306,7 @@ This is within acceptable bounds. Datadog and PagerDuty have generous rate limit
 | Failure Mode                          | Behavior                                                                                                                                                                   |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | All monitoring adapters unconfigured  | `createInvestigationAdapterIfConfigured()` returns `undefined`; `investigateIncident` is not set on the port; chat works without investigation                             |
-| Feature flag disabled                 | `fetchInvestigationContext()` returns `null` immediately                                                                                                                   |
+| No monitoring providers configured    | `investigateIncident` is not set on port; `fetchInvestigationContext()` returns `null` immediately                                                                         |
 | Investigation LLM timeout             | Adapter catches, returns `null`, chat uses static context + RAG                                                                                                            |
 | One monitoring adapter fails          | That adapter returns `[]`, others contribute evidence normally                                                                                                             |
 | All monitoring adapters fail          | Evidence is DB-only (past incidents, analyses, triage results)                                                                                                             |
@@ -315,16 +318,16 @@ Every failure path returns `null` or a degraded result. The chat response is nev
 
 ---
 
-## 13. Feature Flag
+## 13. Activation Gate
 
-The `CHAT_INVESTIGATION_ENABLED` environment variable controls investigation at two points:
+Investigation is activated automatically based on configuration -- no feature flag is required. The gate operates at two levels:
 
-1. **`chatStreaming.ts`** -- gates emission of the `investigation_started` SSE event
-2. **`chatContext.ts`** -- gates the call to `contextPort.investigateIncident`
+1. **`chatContainer.ts`** -- `createInvestigationAdapterIfConfigured()` checks if at least one monitoring provider has API credentials configured. If none are configured, it returns `undefined`, and `investigateIncident` is not set on the `ChatContextPort`.
+2. **`chatStreaming.ts`** / **`chatContext.ts`** -- both check `contextPort?.investigateIncident` (method existence) plus `pageType === "incident"` and `entityId` presence. If any condition is false, investigation is skipped with zero overhead.
 
-The flag is read via `config.CHAT_INVESTIGATION_ENABLED` (through the shared config module, per project convention). It is defined as `optionalBool("CHAT_INVESTIGATION_ENABLED")` in `packages/shared/src/core/config.ts`.
+The `CHAT_INVESTIGATION_ENABLED` config entry has been removed from both `config.ts` and `types.ts` as it was dead code.
 
-When `false` or unset, investigation is completely skipped with zero overhead. The frontend `InvestigationCard` component is inherently gated on the `investigation_result` SSE event -- if the backend does not emit it, nothing renders.
+The frontend `InvestigationCard` component is inherently gated on the `investigation_result` SSE event -- if the backend does not emit it, nothing renders.
 
 ---
 
@@ -371,13 +374,13 @@ The `ChatInvestigationDiagnosis` type sent to the frontend intentionally omits t
 
 ### Unit Tests
 
-| Test                                     | File                               | Assertions                                                                              |
-| ---------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| `formatInvestigationForPrompt`           | `chatInvestigationAdapter.test.ts` | Correct markdown structure, truncation at token limit, empty evidence handling          |
-| `formatInvestigationSection`             | `helpers.test.ts`                  | Guards against null/failed results, returns empty string on failure                     |
-| `buildSystemPrompt` with investigation   | `helpers.test.ts`                  | Investigation section appears between alert context and RAG context                     |
-| `fetchInvestigationContext`              | `chatContext.test.ts`              | Returns null for non-incident pages, returns null when feature flag off, catches errors |
-| `createInvestigationAdapterIfConfigured` | `chatContainer.test.ts`            | Returns undefined when no adapters configured                                           |
+| Test                                     | File                               | Assertions                                                                                       |
+| ---------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `formatInvestigationForPrompt`           | `chatInvestigationAdapter.test.ts` | Correct markdown structure, truncation at token limit, empty evidence handling                   |
+| `formatInvestigationSection`             | `helpers.test.ts`                  | Guards against null/failed results, returns empty string on failure                              |
+| `buildSystemPrompt` with investigation   | `helpers.test.ts`                  | Investigation section appears between alert context and RAG context                              |
+| `fetchInvestigationContext`              | `chatContext.test.ts`              | Returns null for non-incident pages, returns null when port/method not available, catches errors |
+| `createInvestigationAdapterIfConfigured` | `chatContainer.test.ts`            | Returns undefined when no adapters configured                                                    |
 
 ### Integration Tests
 
@@ -409,11 +412,11 @@ The `ChatInvestigationDiagnosis` type sent to the frontend intentionally omits t
 ## 16. Known Limitations
 
 - **Latency**: Investigation adds 3-10s to first-token latency on incident pages. A progressive enhancement approach (start LLM streaming immediately with static context, inject investigation results mid-stream) would reduce perceived latency but requires two LLM calls and significant frontend complexity.
-- **Feature flag still active**: `CHAT_INVESTIGATION_ENABLED` remains as a runtime toggle. Once stable, it can be removed to make investigation the default for incident pages.
+- **No runtime toggle**: Investigation is auto-enabled when monitoring providers are configured. There is no runtime feature flag to disable it without removing provider credentials.
 - **Frontend type duplication**: The frontend maintains its own copy of `ChatStreamChunk` and `ChatInvestigationDiagnosis` types (in `hooks/useCopilotChat/types.ts`) because the frontend Docker build context does not include the shared package. These must be kept in sync manually (marked with a `SYNC` comment).
 - **No per-provider rate limiting**: Monitoring API usage per tenant is not rate-limited beyond the overall chat rate limit. If a single tenant makes excessive requests, all their monitoring API calls go through. Per-provider rate limits should be added if abuse is observed.
 - **No outer timeout on investigation pipeline**: The investigation pipeline has no single `Promise.race` wrapping all four stages. Each LLM call has a 45s timeout individually, but the total worst-case is ~90s (two LLM calls at max timeout). Adding an outer timeout (e.g., 60s) to `fetchInvestigationContext` would cap worst-case latency.
-- **Investigation runs on every message**: When `CHAT_INVESTIGATION_ENABLED` is true and the user is on an incident page, investigation runs on every chat message in that conversation, not just the first. This could be optimized to cache investigation results per incident for a TTL window.
+- **Investigation runs on every message**: When the user is on an incident page with investigation configured, investigation runs on every chat message in that conversation, not just the first. This could be optimized to cache investigation results per incident for a TTL window.
 
 ---
 
