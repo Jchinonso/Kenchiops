@@ -83,7 +83,9 @@ describe("buildSystemPrompt", () => {
   it("should return only the base prompt when no context and no RAG", () => {
     const result = buildSystemPrompt(null, null);
     expect(result).toContain("Kenchi Copilot");
-    expect(result).not.toContain("##");
+    expect(result).toContain("## Accepted URL Formats");
+    expect(result).not.toContain("## Current Analysis Context");
+    expect(result).not.toContain("## Current Incident Context");
   });
 
   it("should include analysis context section when pageContextData is provided", () => {
@@ -126,8 +128,9 @@ describe("buildSystemPrompt", () => {
   it("should skip RAG section when formattedContext is empty string", () => {
     const rag: ChatRAGResult = { formattedContext: "", sources: [] };
     const result = buildSystemPrompt(null, rag);
-    // Should only have the base prompt, no extra sections
-    expect(result).not.toContain("##");
+    // Should only have the base prompt (which includes "## Accepted URL Formats"), no extra context sections
+    expect(result).not.toContain("## Current Analysis Context");
+    expect(result).not.toContain("## Current Incident Context");
   });
 
   it("should not mutate inputs", () => {

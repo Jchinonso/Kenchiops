@@ -138,3 +138,14 @@
 - Rate limiting: only `rateLimitByCategory("expensive")` = 10 req/min/tenant (shared with all expensive endpoints)
 - Plan rate limits: `PLAN_RATE_LIMITS` in `constants/rateLimitCategory.ts` (free=200, pro=300, team=500, enterprise=2000 per min)
 - Created `docs/CHAT_TOKEN_PROTECTION.md` -- 6-layer cost protection design doc
+
+### Investigation-Chat Integration (2026-03-30)
+
+- Rewrote `docs/INCIDENT_INVESTIGATION_CHAT_INTEGRATION.md` from design proposal to architecture reference
+- Investigation module: `packages/shared/src/investigation/` (service, types, monitoringPort, constants, 6 adapters)
+- Chat integration adapter: `services/api/src/adapters/chatInvestigationAdapter.ts` (4-stage bridge)
+- Composition: `services/api/src/container/chatContainer.ts` has `createInvestigationAdapterIfConfigured()`
+- Feature flag: `CHAT_INVESTIGATION_ENABLED` (optionalBool in config.ts)
+- Constants: `INVESTIGATION_LLM_TIMEOUT_MS` = 45s, `MONITORING_DEFAULTS.REQUEST_TIMEOUT_MS` = 15s, `ADAPTER_CONCURRENCY` = 4
+- Frontend: `InvestigationCard.tsx` in CopilotDrawer, skeleton loader + collapsible results card
+- `ChatInvestigationDiagnosis` omits `reasoning` field from `SuggestedInvestigationAction` (bandwidth optimization)

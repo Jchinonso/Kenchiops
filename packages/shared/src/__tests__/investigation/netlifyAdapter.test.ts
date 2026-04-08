@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { RequestContext } from "@kenchi/shared";
 
 const mockResilientGet = jest.fn();
 const mockLoggerInstance = {
@@ -18,16 +17,19 @@ const mockLoggerInstance = {
 };
 const mockCreateLogger = jest.fn(() => mockLoggerInstance);
 
-jest.mock("@kenchi/shared", () => ({
-  ...jest.requireActual("@kenchi/shared"),
+jest.mock("../../http/resilientClient.js", () => ({
   resilientGet: (...args: unknown[]) => mockResilientGet(...args),
+}));
+
+jest.mock("../../core/logger.js", () => ({
   createLogger: (...args: unknown[]) => mockCreateLogger(...args),
 }));
 
-import { createNetlifyMonitoringAdapter } from "../../adapters/netlifyMonitoringAdapter.js";
-import type { MonitoringQuery } from "../../types/monitoringTypes.js";
-import { MONITORING_DEFAULTS, NETLIFY_API } from "../../constants/monitoringConstants.js";
-import { INVESTIGATION_RELEVANCE } from "../../constants/investigationConstants.js";
+import { createNetlifyMonitoringAdapter } from "../../investigation/adapters/netlifyAdapter.js";
+import type { MonitoringQuery } from "../../investigation/monitoringTypes.js";
+import { MONITORING_DEFAULTS, NETLIFY_API } from "../../investigation/monitoringConstants.js";
+import { INVESTIGATION_RELEVANCE } from "../../investigation/constants.js";
+import type { RequestContext } from "../../core/types.js";
 
 // ==================== Test Fixtures ====================
 
@@ -77,7 +79,7 @@ const createTestDeploy = (overrides: Record<string, unknown> = {}) => ({
 
 // ==================== Tests ====================
 
-describe.skip("createNetlifyMonitoringAdapter", () => {
+describe("createNetlifyMonitoringAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

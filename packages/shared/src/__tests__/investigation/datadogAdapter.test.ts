@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { RequestContext } from "@kenchi/shared";
 
 const mockResilientGet = jest.fn();
 const mockLoggerInstance = {
@@ -18,23 +17,19 @@ const mockLoggerInstance = {
 };
 const mockCreateLogger = jest.fn(() => mockLoggerInstance);
 
-jest.mock("@kenchi/shared", () => ({
-  ...jest.requireActual("@kenchi/shared"),
+jest.mock("../../http/resilientClient.js", () => ({
   resilientGet: (...args: unknown[]) => mockResilientGet(...args),
+}));
+
+jest.mock("../../core/logger.js", () => ({
   createLogger: (...args: unknown[]) => mockCreateLogger(...args),
 }));
 
-// NOTE: These tests are temporarily skipped because the adapter implementation
-// was promoted to @kenchi/shared. The Jest mock on @kenchi/shared replaces barrel
-// exports but cannot intercept the adapter's internal module-scoped imports of
-// resilientGet/createLogger. These tests should be moved to
-// packages/shared/src/__tests__/investigation/datadogAdapter.test.ts
-// where internal mocking works correctly.
-const createDatadogMonitoringAdapter = (() =>
-  null) as unknown as typeof import("@kenchi/shared").createDatadogMonitoringAdapter;
-import type { MonitoringQuery } from "../../types/monitoringTypes.js";
-import { MONITORING_DEFAULTS, DATADOG_API } from "../../constants/monitoringConstants.js";
-import { INVESTIGATION_RELEVANCE } from "../../constants/investigationConstants.js";
+import { createDatadogMonitoringAdapter } from "../../investigation/adapters/datadogAdapter.js";
+import type { MonitoringQuery } from "../../investigation/monitoringTypes.js";
+import { MONITORING_DEFAULTS, DATADOG_API } from "../../investigation/monitoringConstants.js";
+import { INVESTIGATION_RELEVANCE } from "../../investigation/constants.js";
+import type { RequestContext } from "../../core/types.js";
 
 // ==================== Test Fixtures ====================
 
@@ -92,7 +87,7 @@ const createTestEvent = (overrides: Record<string, unknown> = {}) => ({
 
 // ==================== Tests ====================
 
-describe.skip("createDatadogMonitoringAdapter", () => {
+describe("createDatadogMonitoringAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

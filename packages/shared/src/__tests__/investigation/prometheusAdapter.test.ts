@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { RequestContext } from "@kenchi/shared";
 
 const mockResilientGet = jest.fn();
 const mockLoggerInstance = {
@@ -18,20 +17,23 @@ const mockLoggerInstance = {
 };
 const mockCreateLogger = jest.fn(() => mockLoggerInstance);
 
-jest.mock("@kenchi/shared", () => ({
-  ...jest.requireActual("@kenchi/shared"),
+jest.mock("../../http/resilientClient.js", () => ({
   resilientGet: (...args: unknown[]) => mockResilientGet(...args),
+}));
+
+jest.mock("../../core/logger.js", () => ({
   createLogger: (...args: unknown[]) => mockCreateLogger(...args),
 }));
 
-import { createPrometheusMonitoringAdapter } from "../../adapters/prometheusMonitoringAdapter.js";
-import type { MonitoringQuery } from "../../types/monitoringTypes.js";
+import { createPrometheusMonitoringAdapter } from "../../investigation/adapters/prometheusAdapter.js";
+import type { MonitoringQuery } from "../../investigation/monitoringTypes.js";
 import {
   MONITORING_DEFAULTS,
   PROMETHEUS_API,
   SYMPTOM_PROMQL_QUERIES,
-} from "../../constants/monitoringConstants.js";
-import { INVESTIGATION_RELEVANCE } from "../../constants/investigationConstants.js";
+} from "../../investigation/monitoringConstants.js";
+import { INVESTIGATION_RELEVANCE } from "../../investigation/constants.js";
+import type { RequestContext } from "../../core/types.js";
 
 // ==================== Test Fixtures ====================
 
@@ -87,7 +89,7 @@ const createTestRangeSample = (overrides: Record<string, unknown> = {}) => ({
 
 // ==================== Tests ====================
 
-describe.skip("createPrometheusMonitoringAdapter", () => {
+describe("createPrometheusMonitoringAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

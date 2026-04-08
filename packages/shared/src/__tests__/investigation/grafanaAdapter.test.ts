@@ -7,26 +7,29 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import type { RequestContext } from "@kenchi/shared";
 
 const mockResilientGet = jest.fn();
-const mockCreateLogger = jest.fn(() => ({
+const mockLoggerInstance = {
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
+};
+const mockCreateLogger = jest.fn(() => mockLoggerInstance);
+
+jest.mock("../../http/resilientClient.js", () => ({
+  resilientGet: (...args: unknown[]) => mockResilientGet(...args),
 }));
 
-jest.mock("@kenchi/shared", () => ({
-  ...jest.requireActual("@kenchi/shared"),
-  resilientGet: (...args: unknown[]) => mockResilientGet(...args),
+jest.mock("../../core/logger.js", () => ({
   createLogger: (...args: unknown[]) => mockCreateLogger(...args),
 }));
 
-import { createGrafanaMonitoringAdapter } from "../../adapters/grafanaMonitoringAdapter.js";
-import type { MonitoringQuery } from "../../types/monitoringTypes.js";
-import { GRAFANA_API } from "../../constants/monitoringConstants.js";
-import { INVESTIGATION_RELEVANCE } from "../../constants/investigationConstants.js";
+import { createGrafanaMonitoringAdapter } from "../../investigation/adapters/grafanaAdapter.js";
+import type { MonitoringQuery } from "../../investigation/monitoringTypes.js";
+import { GRAFANA_API } from "../../investigation/monitoringConstants.js";
+import { INVESTIGATION_RELEVANCE } from "../../investigation/constants.js";
+import type { RequestContext } from "../../core/types.js";
 
 // ==================== Test Fixtures ====================
 
@@ -101,7 +104,7 @@ const createTestAnnotation = (overrides: Record<string, unknown> = {}) => ({
 
 // ==================== Tests ====================
 
-describe.skip("createGrafanaMonitoringAdapter", () => {
+describe("createGrafanaMonitoringAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
