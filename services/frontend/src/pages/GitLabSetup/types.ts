@@ -43,3 +43,23 @@ export interface SetupResultsProps {
 export interface VisibilityBadgeProps {
   readonly visibility: string;
 }
+
+// ==================== Hook Return Types ====================
+
+export interface UseProjectSelectionResult {
+  readonly selectedIds: ReadonlySet<number>;
+  readonly searchQuery: string;
+  readonly setSearchQuery: (query: string) => void;
+  readonly filteredProjects: readonly GitLabProject[];
+  readonly allFilteredSelected: boolean;
+  readonly handleToggle: (projectId: number) => void;
+  readonly handleSelectAll: () => void;
+}
+
+export interface UseWebhookSetupResult {
+  readonly setupResults: readonly ProjectSetupResult[] | null;
+  readonly isSubmitting: boolean;
+  readonly isRetrying: boolean;
+  readonly handleSubmit: (projectIds: ReadonlySet<number>) => void;
+  readonly handleRetryFailed: () => void;
+}
