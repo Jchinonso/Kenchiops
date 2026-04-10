@@ -6,8 +6,8 @@
 
 import {
   createLogger,
-  handlePRMergeEvent,
   ingestLinkedCommitKnowledge,
+  getPRFailures,
   getErrorMessage,
   findTenantByGitHubInstallation,
   getOrFetchPullRequestDiff,
@@ -116,15 +116,19 @@ export const handlePullRequestOpened = async (
 /**
  * Handle pull request merged event
  *
- * Ingests the PR diff into RAG for future reference.
- * This enables learning from merged code changes.
+ * Ingests knowledge ONLY when the merged PR resolves a previously-recorded
+ * CI failure (failure → fix pairing via `ingestLinkedCommitKnowledge`).
+ *
+ * We intentionally do NOT ingest every merged PR's diff as generic "knowledge" —
+ * arbitrary diffs are noise without a causal link to a problem. The knowledge
+ * base is curated via the UI for everything else.
  */
 export const handlePullRequestMerged = async (
   webhook: PullRequestWebhook
 ): Promise<PRHandlerResult> => {
   const { pull_request, repository, installation } = webhook;
 
-  logger.info("Processing merged PR for RAG ingestion", {
+  logger.info("Processing merged PR for failure→fix knowledge linking", {
     title: pull_request.title,
     repository: repository.full_name,
     number: pull_request.number,
@@ -135,40 +139,56 @@ export const handlePullRequestMerged = async (
     // Get tenant for this installation
     const installationId = installation?.id;
     if (!installationId) {
-      logger.warn("No installation ID for merged PR, skipping RAG ingestion", {
+      logger.warn("No installation ID for merged PR, skipping knowledge linking", {
         repository: repository.full_name,
         prNumber: pull_request.number,
       });
       return {
         handled: true,
-        message: "Merged PR logged (no installation ID for RAG)",
+        message: "Merged PR logged (no installation ID)",
       };
     }
 
     const tenant = await findTenantByGitHubInstallation(installationId);
     if (!tenant) {
-      logger.warn("No tenant for installation, skipping RAG ingestion", {
+      logger.warn("No tenant for installation, skipping knowledge linking", {
         installationId,
         repository: repository.full_name,
       });
       return {
         handled: true,
-        message: "Merged PR logged (no tenant for RAG)",
+        message: "Merged PR logged (no tenant)",
       };
     }
 
-    // Fetch the PR diff
-    const diffContent = await fetchPRDiff(
-      installationId,
-      repository.owner.login,
-      repository.name,
-      pull_request.number
-    );
-
-    if (!diffContent) {
-      logger.warn("Could not fetch diff for merged PR", {
+    // Short-circuit on the cheap check FIRST: does this PR have any tracked CI
+    // failures in Redis? If not, there's nothing to link, and we must NOT fetch
+    // the diff/commits from GitHub — that would be wasted API quota on every
+    // merged PR (the common case).
+    const failureContext = await getPRFailures(repository.full_name, pull_request.number);
+    if (!failureContext || failureContext.failures.length === 0) {
+      logger.info("Merged PR has no tracked CI failures — nothing to link", {
         repository: repository.full_name,
         prNumber: pull_request.number,
+      });
+      return {
+        handled: true,
+        message: "Merged PR logged (no linked failures — nothing ingested)",
+      };
+    }
+
+    // There ARE linked failures. Only NOW do we pay for the GitHub API calls
+    // to fetch the diff + commit messages needed to build the failure→fix pair.
+    const [diffContent, commitMessages] = await Promise.all([
+      fetchPRDiff(installationId, repository.owner.login, repository.name, pull_request.number),
+      fetchPRCommits(installationId, repository.owner.login, repository.name, pull_request.number),
+    ]);
+
+    if (!diffContent) {
+      logger.warn("Could not fetch diff for merged PR with linked failures", {
+        repository: repository.full_name,
+        prNumber: pull_request.number,
+        linkedFailureCount: failureContext.failures.length,
       });
       return {
         handled: true,
@@ -182,33 +202,10 @@ export const handlePullRequestMerged = async (
       .filter((line) => line.startsWith("+++ b/"))
       .map((line) => line.slice(6));
 
-    // Ingest into RAG
-    const result = await handlePRMergeEvent({
-      repository: repository.full_name,
-      prNumber: pull_request.number,
-      commitSha: pull_request.merge_commit_sha ?? pull_request.head.sha,
-      diffContent,
-      filePaths,
-      tenantId: tenant.id,
-    });
-
-    logger.info("Merged PR ingested into RAG", {
-      repository: repository.full_name,
-      prNumber: pull_request.number,
-      chunksCreated: result.chunksCreated,
-      success: result.success,
-    });
-
-    // Fetch actual commit messages for linked knowledge
-    const commitMessages = await fetchPRCommits(
-      installationId,
-      repository.owner.login,
-      repository.name,
-      pull_request.number
-    );
-
-    // Check for linked commit knowledge (failure context + commit + diff)
-    // This creates high-value knowledge when a PR fixes a CI failure
+    // `ingestLinkedCommitKnowledge` re-reads the failure context internally (it
+    // is the authoritative source of truth and also handles clearing the key on
+    // success). Our getPRFailures call above is a cheap pre-check — the real
+    // ingestion still goes through the canonical path here.
     const linkedResult = await ingestLinkedCommitKnowledge({
       repository: repository.full_name,
       prNumber: pull_request.number,
@@ -221,25 +218,32 @@ export const handlePullRequestMerged = async (
       author: pull_request.user.login,
     });
 
-    if (!linkedResult.skipped) {
-      logger.info("Linked commit knowledge created", {
+    if (linkedResult.skipped) {
+      // Rare race: failures were tracked at pre-check time but cleared by
+      // another process before ingestion. Log and move on.
+      logger.info("Linked failures disappeared between pre-check and ingestion", {
         repository: repository.full_name,
         prNumber: pull_request.number,
-        linkedFailures: linkedResult.linkedFailures,
-        chunksCreated: linkedResult.chunksCreated,
       });
+      return {
+        handled: true,
+        message: "Merged PR logged (linked failures cleared mid-flight)",
+      };
     }
 
-    const linkedMessage = linkedResult.skipped
-      ? ""
-      : `, ${linkedResult.linkedFailures} failure(s) linked`;
+    logger.info("Linked commit knowledge created", {
+      repository: repository.full_name,
+      prNumber: pull_request.number,
+      linkedFailures: linkedResult.linkedFailures,
+      chunksCreated: linkedResult.chunksCreated,
+    });
 
     return {
       handled: true,
-      message: `Merged PR ingested: ${result.chunksCreated} chunks created${linkedMessage}`,
+      message: `Merged PR linked to ${linkedResult.linkedFailures} failure(s), ${linkedResult.chunksCreated} chunks created`,
     };
   } catch (error) {
-    logger.error("Failed to process merged PR for RAG", {
+    logger.error("Failed to process merged PR for knowledge linking", {
       repository: repository.full_name,
       prNumber: pull_request.number,
       error: getErrorMessage(error),
@@ -248,7 +252,7 @@ export const handlePullRequestMerged = async (
     // Don't fail the webhook - just log and continue
     return {
       handled: true,
-      message: "Merged PR logged (RAG ingestion failed)",
+      message: "Merged PR logged (knowledge linking failed)",
     };
   }
 };
