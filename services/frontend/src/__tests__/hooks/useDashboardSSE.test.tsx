@@ -115,7 +115,7 @@ beforeEach(() => {
   MockEventSource.instances = [];
   (globalThis as Record<string, unknown>).EventSource = MockEventSource;
   sessionStorage.clear();
-  vi.spyOn(crypto, "randomUUID").mockReturnValue("test-uuid-1234");
+  vi.spyOn(crypto, "randomUUID").mockReturnValue("test-uuid-1234-5678-9012-345678901234");
 });
 
 afterEach(() => {
