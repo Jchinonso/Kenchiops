@@ -21,6 +21,16 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { DashboardSidebar } from "@/components/DashboardSidebar";
+import type { UserInfo } from "@/components/DashboardSidebar/types";
+
+interface SidebarTestProps {
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onLogout: () => void;
+  readonly isLoggingOut: boolean;
+  readonly user: UserInfo | null;
+  readonly onOpenShortcuts: () => void;
+}
 
 // Mock useAuth
 vi.mock("@/hooks/useAuth", () => ({
@@ -69,7 +79,7 @@ vi.mock("@/components/ui/tooltip", () => ({
   TooltipContent: () => null,
 }));
 
-const defaultProps = {
+const defaultProps: SidebarTestProps = {
   isOpen: true,
   onClose: vi.fn(),
   onLogout: vi.fn(),

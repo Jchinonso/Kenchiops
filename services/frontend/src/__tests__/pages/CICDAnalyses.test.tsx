@@ -53,6 +53,17 @@ vi.mock("@/lib/csvExport", () => ({
   exportAnalysesToCSV: vi.fn(),
 }));
 
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({
+    children,
+  }: {
+    readonly children: React.ReactNode;
+    readonly asChild?: boolean;
+  }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+
 vi.mock("@/pages/AnalysisDetailPanel", () => ({
   AnalysisDetailPanel: () => <div data-testid="detail-panel" />,
 }));

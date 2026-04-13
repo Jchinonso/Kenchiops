@@ -17,6 +17,7 @@ import {
   DetailSkeleton,
   DetailContent,
 } from "@/components/AnalysisDetailContent";
+import type { AnalysisRecord } from "@/hooks/useDashboardData/types";
 
 // Mock FeedbackSection to avoid render-loop from useMyFeedback in React 19
 vi.mock("@/components/FeedbackSection", () => ({
@@ -76,7 +77,7 @@ vi.mock("@/lib/formatters", () => ({
     Object.entries(signals).map(([k, v]) => [k, String(v)]),
 }));
 
-const mockAnalysis = {
+const mockAnalysis: AnalysisRecord = {
   id: "analysis-1",
   tenantId: "tenant-1",
   aggregationKey: "repo:org/repo",
@@ -89,7 +90,9 @@ const mockAnalysis = {
   eventId: "event-123",
   fullAnalysis: { raw: "data" },
   createdAt: "2026-02-17T00:00:00Z",
-  severity: "high" as const,
+  modelVersionId: null,
+  ciProvider: null,
+  headSha: null,
 };
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

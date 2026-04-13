@@ -40,7 +40,6 @@ jest.mock("@kenchi/shared", () => ({
   countOwnersByTenant: jest.fn(() => Promise.resolve(2)),
   removeMemberFromTenant: jest.fn(() => Promise.resolve()),
   logAuditEvent: jest.fn(() => Promise.resolve()),
-  handleDocUpdateEvent: jest.fn(() => Promise.resolve()),
   AUDIT_ACTIONS: {
     MEMBER_REMOVED: "member_removed",
     MEMBER_REMOVED_PROVIDER: "member_removed_provider",
@@ -346,20 +345,22 @@ describe("Webhook Routes", () => {
       expect(mockHandleInstallation).not.toHaveBeenCalled();
     });
 
-    it("should not call handlers for unknown events", async () => {
-      // Push events with non-default branch are ignored (no handlers called)
-      await request(app)
+    it("should not call handlers for push events (push is no longer handled)", async () => {
+      // Push events are intentionally unhandled — the knowledge base is curated
+      // via the UI and failure→fix pairs come from PR merge events.
+      const response = await request(app)
         .post("/webhook")
         .set("X-GitHub-Event", "push")
         .set("X-GitHub-Delivery", "12345")
         .send({
-          ref: "refs/heads/feature-branch",
+          ref: "refs/heads/main",
           repository: {
             full_name: "owner/repo",
             default_branch: "main",
           },
         });
 
+      expect(response.body.status).toBe("ignored");
       expect(mockHandlePullRequest).not.toHaveBeenCalled();
       expect(mockHandleCheckRun).not.toHaveBeenCalled();
       expect(mockHandleInstallation).not.toHaveBeenCalled();

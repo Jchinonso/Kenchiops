@@ -9,7 +9,6 @@ import {
   asyncHandler,
   createLogger,
   HTTP_STATUS,
-  handleDocUpdateEvent,
   findTenantByGitHubInstallation,
   findWebhookActivityByDeliveryId,
   getErrorMessage,
@@ -34,7 +33,6 @@ import type {
   PullRequestWebhook,
   CheckRunWebhook,
   InstallationWebhook,
-  PushWebhook,
   OrganizationMemberWebhook,
 } from "../types/githubTypes.js";
 import type { WebhookHandlerResult, GitHubEventHandler } from "./webhookRoutesTypes.js";
@@ -59,144 +57,6 @@ const formatInstallationResponse = (result: WebhookHandlerResult): object => ({
   message: result.message,
   tenantId: result.tenantId,
 });
-
-/**
- * Documentation file extensions that trigger RAG ingestion
- */
-const DOC_FILE_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".mdx", ".rst", ".txt", ".adoc"]);
-
-/**
- * Check if a file path is a documentation file
- */
-const isDocFile = (filePath: string): boolean => {
-  const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
-  return DOC_FILE_EXTENSIONS.has(ext);
-};
-
-/**
- * Extract title from file path
- */
-const extractTitleFromPath = (filePath: string): string => {
-  const fileName = filePath.slice(filePath.lastIndexOf("/") + 1);
-  const baseName = fileName.slice(0, fileName.lastIndexOf("."));
-  return baseName
-    .replace(/-/g, " ")
-    .replace(/_/g, " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-/**
- * Handle push event for doc file updates
- */
-const handlePush = async (webhook: PushWebhook): Promise<WebhookHandlerResult> => {
-  const { repository, commits, installation, ref } = webhook;
-
-  // Only process pushes to main/master branch
-  const mainBranch = `refs/heads/${repository.default_branch}`;
-  if (ref !== mainBranch) {
-    logger.debug("Skipping push to non-default branch", {
-      repository: repository.full_name,
-      ref,
-      defaultBranch: repository.default_branch,
-    });
-    return {
-      handled: false,
-      message: "Push to non-default branch ignored",
-    };
-  }
-
-  // Collect all modified/added doc files
-  const docFiles = commits.flatMap((commit) =>
-    [...commit.added, ...commit.modified].filter(isDocFile)
-  );
-
-  if (docFiles.length === 0) {
-    return {
-      handled: false,
-      message: "No documentation files in push",
-    };
-  }
-
-  // Get tenant for this installation
-  const installationId = installation?.id;
-  if (!installationId) {
-    logger.warn("No installation ID for push event", {
-      repository: repository.full_name,
-    });
-    return {
-      handled: true,
-      message: "Push logged (no installation ID for RAG)",
-    };
-  }
-
-  try {
-    const tenant = await findTenantByGitHubInstallation(installationId);
-    if (!tenant) {
-      return {
-        handled: true,
-        message: "Push logged (no tenant for RAG)",
-      };
-    }
-
-    // Process each doc file
-    // let: accumulator incremented per successful doc file ingestion
-    let successCount = 0;
-    const processResults = await Promise.all(
-      docFiles.map(async (filePath) => {
-        try {
-          // Note: In a full implementation, we would fetch the file content
-          // from GitHub. For now, we log and create a placeholder.
-          const result = await handleDocUpdateEvent({
-            repository: repository.full_name,
-            filePath,
-            content: `[Placeholder - fetch content from ${filePath}]`,
-            title: extractTitleFromPath(filePath),
-            tenantId: tenant.id,
-          });
-
-          if (result.success) {
-            successCount++;
-          }
-          return result;
-        } catch (error) {
-          logger.error("Failed to process doc file update", {
-            filePath,
-            error: getErrorMessage(error),
-          });
-          return { success: false, chunksCreated: 0 };
-        }
-      })
-    );
-
-    const totalChunks = processResults.reduce(
-      (sum: number, r: { success: boolean; chunksCreated: number }) => sum + r.chunksCreated,
-      0
-    );
-
-    logger.info("Push event processed for RAG", {
-      repository: repository.full_name,
-      docFilesFound: docFiles.length,
-      successCount,
-      totalChunks,
-    });
-
-    return {
-      handled: true,
-      message: `Processed ${successCount}/${docFiles.length} doc files, ${totalChunks} chunks created`,
-    };
-  } catch (error) {
-    logger.error("Failed to process push event for RAG", {
-      repository: repository.full_name,
-      error: getErrorMessage(error),
-    });
-    return {
-      handled: true,
-      message: "Push logged (RAG processing failed)",
-    };
-  }
-};
 
 /**
  * Handle organization member events (member_removed, member_added, member_invited).
@@ -327,10 +187,6 @@ const eventHandlers: Record<string, GitHubEventHandler> = {
   installation: {
     handle: (body) => handleInstallation(body as InstallationWebhook),
     formatResponse: formatInstallationResponse,
-  },
-  push: {
-    handle: (body) => handlePush(body as PushWebhook),
-    formatResponse: formatStandardResponse,
   },
   organization: {
     handle: (body) => handleOrganizationEvent(body as OrganizationMemberWebhook),

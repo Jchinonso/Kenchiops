@@ -47,8 +47,14 @@ import userEvent from "@testing-library/user-event";
 // ==================== Imports (after mocks, resolved by Vitest hoisting) ====================
 
 import { FeedbackSection } from "@/components/FeedbackSection";
-import { useMyFeedback, useSubmitFeedback } from "@/hooks/useAnalysisFeedback";
+import {
+  useMyFeedback,
+  useSubmitFeedback,
+  type ExistingFeedback,
+} from "@/hooks/useAnalysisFeedback";
 import { toast } from "sonner";
+
+type AnalysisFeedbackType = ExistingFeedback["feedbackType"];
 
 // ==================== Mock Setup ====================
 
@@ -99,24 +105,22 @@ const getButtonByText = (text: string): HTMLButtonElement => {
   return el;
 };
 
-/** Default return value for useMyFeedback when no feedback exists.
- * Use `id: null` so the component's prevFeedbackId check (null !== null = false)
- * doesn't trigger an infinite re-render in React 19. */
+/** Default return value for useMyFeedback when no feedback exists. */
 const noFeedback = () => ({
-  data: { id: null, feedbackType: null, correction: null, userId: null, createdAt: null },
+  data: null,
   isLoading: false,
   error: null,
 });
 
 /** Return value for useMyFeedback when feedback exists */
-const withFeedback = (feedbackType: string, correction: string | null = null) => ({
+const withFeedback = (feedbackType: AnalysisFeedbackType, correction: string | null = null) => ({
   data: {
     id: "fb-1",
     feedbackType,
     correction,
     userId: "user-1",
     createdAt: "2025-06-15T12:00:00.000Z",
-  },
+  } satisfies ExistingFeedback,
   isLoading: false,
   error: null,
 });
@@ -196,7 +200,7 @@ describe("FeedbackSection", () => {
   describe("disabled state", () => {
     it("should disable both buttons when feedback is being fetched", () => {
       mockUseMyFeedback.mockReturnValue({
-        data: { id: null, feedbackType: null, correction: null, userId: null, createdAt: null },
+        data: null,
         isLoading: true,
         error: null,
       });

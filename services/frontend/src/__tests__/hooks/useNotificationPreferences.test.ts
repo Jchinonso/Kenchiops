@@ -230,8 +230,8 @@ describe("useNotificationPreferences", () => {
 
     it("should handle missing Notification API gracefully when enabling", async () => {
       // Ensure Notification is undefined
-      const originalNotification = (window as Record<string, unknown>).Notification;
-      delete (window as Record<string, unknown>).Notification;
+      const originalNotification = (window as unknown as Record<string, unknown>).Notification;
+      delete (window as unknown as Record<string, unknown>).Notification;
 
       const { result } = renderHook(() => useNotificationPreferences());
 
@@ -244,7 +244,7 @@ describe("useNotificationPreferences", () => {
 
       // Restore
       if (originalNotification) {
-        (window as Record<string, unknown>).Notification = originalNotification;
+        (window as unknown as Record<string, unknown>).Notification = originalNotification;
       }
     });
 
