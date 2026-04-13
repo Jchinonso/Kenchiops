@@ -295,13 +295,35 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "cd /opt/kenchi && DEPLOY_SHA=${{ github.sha }} bash deploy/server-deploy.sh"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+          SSH_TARGET="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          DEPLOY_CMD="cd /opt/kenchi && DEPLOY_SHA=${{ github.sha }} bash deploy/server-deploy.sh"
+
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          attempt=1
+
+          while [ $attempt -le $MAX_RETRIES ]; do
+            echo "Deploy attempt $attempt of $MAX_RETRIES..."
+            if ssh $SSH_OPTS "$SSH_TARGET" "$DEPLOY_CMD"; then
+              echo "Deploy succeeded on attempt $attempt"
+              exit 0
+            fi
+
+            if [ $attempt -lt $MAX_RETRIES ]; then
+              echo "Attempt $attempt failed. Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          echo "All $MAX_RETRIES deploy attempts failed."
+          exit 1
 
       - name: Deploy failed — notify
         if: failure()
         run: |
-          echo "::error::Deploy failed for SHA ${{ github.sha }}. Auto-rollback may have been triggered on the VPS."
+          echo "::error::Deploy failed for SHA ${{ github.sha }} after 3 attempts. Auto-rollback may have been triggered on the VPS."
           echo "Check VPS logs: ssh root@${{ secrets.VPS_HOST }} 'cat /opt/kenchi/.deploy-history | tail -5'"
 
