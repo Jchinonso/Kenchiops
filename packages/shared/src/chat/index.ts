@@ -46,7 +46,12 @@ export type {
 
 export { createChatService } from "./chatService.js";
 
-export { fetchPageContext, fetchRAGContext, fetchInvestigationContext } from "./chatContext.js";
+export {
+  fetchPageContext,
+  fetchRAGContext,
+  fetchInvestigationContext,
+  extractAnalysisIdFromMessage,
+} from "./chatContext.js";
 
 export {
   ensureConversation,

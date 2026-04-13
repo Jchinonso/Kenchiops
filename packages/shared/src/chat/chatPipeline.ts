@@ -53,7 +53,7 @@ const buildFullPipeline = async (
 ): Promise<CompletionPipeline> => {
   // Fetch page context + investigation in parallel (all fail-safe)
   const [pageContextData, investigationResult] = await Promise.all([
-    fetchPageContext(contextPort, input.pageContext, input.tenantId, context),
+    fetchPageContext(contextPort, input.pageContext, input.tenantId, context, input.userMessage),
     fetchInvestigationContext(contextPort, input, context),
   ]);
 

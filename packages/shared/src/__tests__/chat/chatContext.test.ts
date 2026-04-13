@@ -31,6 +31,7 @@ import {
   fetchPageContext,
   fetchRAGContext,
   fetchInvestigationContext,
+  extractAnalysisIdFromMessage,
 } from "../../chat/chatContext.js";
 
 // ==================== Fixtures ====================
@@ -279,6 +280,131 @@ describe("fetchPageContext", () => {
         error: "db error",
       })
     );
+  });
+
+  it("should extract analysis ID from a pasted Kenchi URL when no entityId is set", async () => {
+    const contextData = createContextData({ entityType: "analysis", title: "Build failure" });
+    const port = createContextPort({
+      getAnalysisContext: jest
+        .fn<ChatContextPort["getAnalysisContext"]>()
+        .mockResolvedValue(contextData),
+    });
+
+    const result = await fetchPageContext(
+      port,
+      { pageType: "overview" },
+      "t-1",
+      testContext,
+      "https://kenchiops.app/dashboard/cicd/analyses/ana_1775616179573_9pmcs8hn8"
+    );
+
+    expect(port.getAnalysisContext).toHaveBeenCalledWith(
+      "ana_1775616179573_9pmcs8hn8",
+      "t-1",
+      testContext
+    );
+    expect(result).toEqual(contextData);
+  });
+
+  it("should extract a bare analysis ID from the user message", async () => {
+    const contextData = createContextData({ entityType: "analysis" });
+    const port = createContextPort({
+      getAnalysisContext: jest
+        .fn<ChatContextPort["getAnalysisContext"]>()
+        .mockResolvedValue(contextData),
+    });
+
+    const result = await fetchPageContext(
+      port,
+      { pageType: "overview" },
+      "t-1",
+      testContext,
+      "can you look at ana_abc123 for me?"
+    );
+
+    expect(port.getAnalysisContext).toHaveBeenCalledWith("ana_abc123", "t-1", testContext);
+    expect(result).toEqual(contextData);
+  });
+
+  it("should prefer analysis ID from message over pageContext.entityId", async () => {
+    const contextData = createContextData({ entityType: "analysis" });
+    const port = createContextPort({
+      getAnalysisContext: jest
+        .fn<ChatContextPort["getAnalysisContext"]>()
+        .mockResolvedValue(contextData),
+    });
+
+    await fetchPageContext(
+      port,
+      { pageType: "analysis", entityId: "ana_pagecontext" },
+      "t-1",
+      testContext,
+      "actually look at ana_frommessage instead"
+    );
+
+    expect(port.getAnalysisContext).toHaveBeenCalledWith("ana_frommessage", "t-1", testContext);
+  });
+
+  it("should fall back to pageContext.entityId when no ID in message", async () => {
+    const contextData = createContextData({ entityType: "analysis" });
+    const port = createContextPort({
+      getAnalysisContext: jest
+        .fn<ChatContextPort["getAnalysisContext"]>()
+        .mockResolvedValue(contextData),
+    });
+
+    await fetchPageContext(
+      port,
+      { pageType: "analysis", entityId: "ana_fromcontext" },
+      "t-1",
+      testContext,
+      "what does this analysis mean?"
+    );
+
+    expect(port.getAnalysisContext).toHaveBeenCalledWith("ana_fromcontext", "t-1", testContext);
+  });
+
+  it("should not match 'ana_' substrings inside other words", async () => {
+    const port = createContextPort();
+
+    const result = await fetchPageContext(
+      port,
+      { pageType: "overview" },
+      "t-1",
+      testContext,
+      "I love banana_smoothies"
+    );
+
+    expect(result).toBeNull();
+    expect(port.getAnalysisContext).not.toHaveBeenCalled();
+  });
+});
+
+// ==================== extractAnalysisIdFromMessage ====================
+
+describe("extractAnalysisIdFromMessage", () => {
+  it("extracts ID from full Kenchi dashboard URL", () => {
+    expect(
+      extractAnalysisIdFromMessage(
+        "https://kenchiops.app/dashboard/cicd/analyses/ana_1775616179573_9pmcs8hn8"
+      )
+    ).toBe("ana_1775616179573_9pmcs8hn8");
+  });
+
+  it("extracts bare ID", () => {
+    expect(extractAnalysisIdFromMessage("tell me about ana_abc123")).toBe("ana_abc123");
+  });
+
+  it("returns null when no ID is present", () => {
+    expect(extractAnalysisIdFromMessage("what went wrong with my build?")).toBeNull();
+  });
+
+  it("returns null for substring matches inside other words", () => {
+    expect(extractAnalysisIdFromMessage("banana_daiquiri")).toBeNull();
+  });
+
+  it("returns the first ID when multiple are present", () => {
+    expect(extractAnalysisIdFromMessage("compare ana_first and ana_second")).toBe("ana_first");
   });
 });
 
