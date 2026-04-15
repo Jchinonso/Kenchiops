@@ -119,21 +119,21 @@ decrypt_secrets || exit 1
 
 log "=== Kenchi Deploy: Build ==="
 
-docker compose -f "$COMPOSE_FILE" build
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
 # ==================== 5. Deploy & Wait for Healthy ====================
 
 log "=== Kenchi Deploy: Deploy ==="
 
 # --wait blocks until all containers with healthchecks report healthy (or timeout)
-if docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180; then
+if docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --wait --wait-timeout 180; then
   log "All containers healthy"
 else
   err "Containers failed to become healthy"
 
   # Show what's unhealthy
-  docker compose -f "$COMPOSE_FILE" ps
-  docker compose -f "$COMPOSE_FILE" logs --tail=20 2>&1 | tail -40
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --tail=20 2>&1 | tail -40
 
   # ==================== Auto-Rollback ====================
 
@@ -146,10 +146,10 @@ else
   # Re-decrypt in case the previous SHA has a different encrypted secrets file.
   decrypt_secrets || err "Rollback decryption failed — containers will use stale env"
 
-  docker compose -f "$COMPOSE_FILE" build
-  docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 || true
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --wait --wait-timeout 180 || true
 
-  if docker compose -f "$COMPOSE_FILE" ps | grep -q "unhealthy\|Exit"; then
+  if docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps | grep -q "unhealthy\|Exit"; then
     err "CRITICAL: Rollback also failed. Manual intervention required."
     echo "$(date -Iseconds) | $CURRENT_SHA | ROLLBACK_FAILED | MANUAL INTERVENTION NEEDED" >> "$DEPLOY_HISTORY"
   else
@@ -167,7 +167,7 @@ log "=== Kenchi Deploy: Migrations ==="
 for migration in database/init/*.sql; do
   BASENAME=$(basename "$migration")
   log "Applying: $BASENAME"
-  docker compose -f "$COMPOSE_FILE" exec -T postgres \
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres \
     psql -U kenchi -d kenchi -f "/docker-entrypoint-initdb.d/$BASENAME" 2>&1 | \
     grep -v "already exists" | grep -v "NOTICE" || true
 done
@@ -175,7 +175,7 @@ done
 # ==================== 7. Success ====================
 
 log "=== Deploy SUCCESS ==="
-docker compose -f "$COMPOSE_FILE" ps
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 echo "$(date -Iseconds) | $DEPLOY_SHA | SUCCESS | deployed by $(whoami)" >> "$DEPLOY_HISTORY"
 
 docker image prune -f >/dev/null 2>&1 || true

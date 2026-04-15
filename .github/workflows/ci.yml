@@ -258,24 +258,35 @@ jobs:
           echo "  code-quality: ${{ needs.code-quality.result }}"
           echo "  docker: ${{ needs.docker.result }}"
 
-          # Core jobs must pass
-          if [[ "${{ needs.lint.result }}" != "success" ]] || \
-             [[ "${{ needs.type-check.result }}" != "success" ]] || \
-             [[ "${{ needs.test.result }}" != "success" ]] || \
-             [[ "${{ needs.build.result }}" != "success" ]] || \
-             [[ "${{ needs.code-quality.result }}" != "success" ]]; then
+          # `cancelled` is treated as acceptable for every job: the workflow
+          # concurrency group cancels in-flight runs whenever a newer commit
+          # is pushed to the same ref, and the newer run's CI is what gates
+          # deploy. We should not mark the whole workflow failed just because
+          # a later commit superseded this one.
+          check() {
+            local name="$1"
+            local result="$2"
+            if [[ "$result" != "success" && "$result" != "cancelled" && "$result" != "skipped" ]]; then
+              echo "::error::$name failed with result: $result"
+              return 1
+            fi
+            return 0
+          }
+
+          fail=0
+          check "lint"          "${{ needs.lint.result }}"          || fail=1
+          check "type-check"    "${{ needs.type-check.result }}"    || fail=1
+          check "test"          "${{ needs.test.result }}"          || fail=1
+          check "build"         "${{ needs.build.result }}"         || fail=1
+          check "code-quality"  "${{ needs.code-quality.result }}"  || fail=1
+          check "docker"        "${{ needs.docker.result }}"        || fail=1
+
+          if [[ $fail -ne 0 ]]; then
             echo "One or more core jobs failed"
             exit 1
           fi
 
-          # Docker build: allow skipped (cancelled by concurrency) since deploy builds on VPS
-          if [[ "${{ needs.docker.result }}" != "success" ]] && \
-             [[ "${{ needs.docker.result }}" != "skipped" ]]; then
-            echo "Docker build failed (not skipped)"
-            exit 1
-          fi
-
-          echo "All CI checks passed!"
+          echo "All CI checks passed (or were superseded by a newer run)!"
 
   deploy-staging:
     name: Deploy to Staging

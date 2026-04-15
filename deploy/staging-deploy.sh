@@ -97,16 +97,16 @@ decrypt_secrets || exit 1
 # ==================== Build + Deploy ====================
 
 log "=== Staging Deploy: Build ==="
-docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" build
+docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
 log "=== Staging Deploy: Up ==="
-if docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120; then
+if docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --wait --wait-timeout 120; then
   log "Staging containers healthy"
   echo "$(date -Iseconds) | $DEPLOY_SHA | SUCCESS | staging deploy by $(whoami)" >> "$DEPLOY_HISTORY"
 else
   err "Staging containers failed to become healthy"
-  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" ps
-  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" logs --tail=30
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --tail=30
   echo "$(date -Iseconds) | $DEPLOY_SHA | FAILED | staging deploy by $(whoami)" >> "$DEPLOY_HISTORY"
   exit 1
 fi
@@ -118,7 +118,7 @@ log "=== Staging Deploy: Migrations ==="
 for migration in database/init/*.sql; do
   BASENAME=$(basename "$migration")
   log "Applying: $BASENAME"
-  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" exec -T postgres \
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres \
     psql -U kenchi -d kenchi -f "/docker-entrypoint-initdb.d/$BASENAME" 2>&1 | \
     grep -v "already exists" | grep -v "NOTICE" || true
 done
@@ -133,7 +133,7 @@ if docker ps --format '{{.Names}}' | grep -q '^kenchi-caddy$'; then
 fi
 
 log "=== Staging Deploy SUCCESS ==="
-docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" ps
+docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 docker image prune -f >/dev/null 2>&1 || true
 
 log "Staging deploy complete: $DEPLOY_SHA"
