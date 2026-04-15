@@ -1,0 +1,20 @@
+# SOPS configuration — drives which age recipients can decrypt which files.
+#
+# See docs/SECURITY_IMPLEMENTATION.md §B for setup and rotation procedures.
+#
+# The age public key below is the one generated on the production VPS
+# and stored at /etc/kenchi/age.key (private) and /etc/kenchi/age.pub.
+# A copy of the private key also lives in the founder's password manager.
+#
+# To encrypt a file: sops --encrypt --input-type dotenv --output-type dotenv in.env > out.env.enc
+# To decrypt a file: SOPS_AGE_KEY_FILE=/etc/kenchi/age.key sops --decrypt in.env.enc
+creation_rules:
+  # Production env files must use the production age key.
+  - path_regex: deploy/secrets/production\.env\.enc$
+    age: age1lj79uknkmjh6usngrlplgu7ls89c6z3qz94yg32ddmj9hss2ddas07skaa
+    input_type: dotenv
+  # Staging env files (can share the same key for now; split when staging
+  # gains a separate set of third-party credentials).
+  - path_regex: deploy/secrets/staging\.env\.enc$
+    age: age1lj79uknkmjh6usngrlplgu7ls89c6z3qz94yg32ddmj9hss2ddas07skaa
+    input_type: dotenv

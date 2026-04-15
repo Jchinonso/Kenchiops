@@ -277,12 +277,35 @@ jobs:
 
           echo "All CI checks passed!"
 
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: [self-hosted, production]
+    needs: [ci-success]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    timeout-minutes: 15
+    # Staging uses a separate GitHub Environment with no approval gate.
+    # Scoped secrets (if any) live under the `staging` environment.
+    environment: staging
+    steps:
+      - name: Deploy
+        run: |
+          cd /opt/kenchi-staging && DEPLOY_SHA=${{ github.sha }} bash deploy/staging-deploy.sh
+
+      - name: Deploy failed — notify
+        if: failure()
+        run: |
+          echo "::error::Staging deploy failed for SHA ${{ github.sha }}."
+          echo "Check VPS logs: cat /opt/kenchi-staging/.deploy-history | tail -5"
+
   deploy:
     name: Deploy to Production
     runs-on: [self-hosted, production]
     needs: [ci-success]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     timeout-minutes: 15
+    # Production uses a gated GitHub Environment: configure Settings →
+    # Environments → production with "Required reviewers" for manual
+    # approval before every deploy.
     environment: production
     steps:
       - name: Deploy

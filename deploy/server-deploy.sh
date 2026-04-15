@@ -16,7 +16,12 @@ set -euo pipefail
 
 APP_DIR="/opt/kenchi"
 COMPOSE_FILE="docker-compose.prod.yml"
+# Encrypted secrets are committed to the repo and decrypted on the VPS
+# during deploy. Source of truth: deploy/secrets/production.env.enc.
+# The file is synced to /etc/kenchi/ as part of `git reset --hard` below.
+ENV_FILE_ENC="${APP_DIR}/deploy/secrets/production.env.enc"
 ENV_FILE="/etc/kenchi/.env.production"
+AGE_KEY_FILE="/etc/kenchi/age.key"
 ROLLBACK_FILE="${APP_DIR}/.rollback-sha"
 DEPLOY_HISTORY="${APP_DIR}/.deploy-history"
 
@@ -25,13 +30,46 @@ cd "$APP_DIR"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 err() { log "ERROR: $*" >&2; }
 
+# Decrypts deploy/secrets/production.env.enc -> /etc/kenchi/.env.production
+# using the age key at /etc/kenchi/age.key. Decrypts to a temp file and
+# atomically moves it into place so docker compose never reads a half-
+# written file. Called after git pull (so we pick up new secrets from the
+# deployed SHA) and again during rollback.
+decrypt_secrets() {
+  if [ ! -f "$ENV_FILE_ENC" ]; then
+    err "Encrypted secrets not found at $ENV_FILE_ENC"
+    err "See docs/SECURITY_IMPLEMENTATION.md §B for setup."
+    return 1
+  fi
+
+  if [ ! -r "$AGE_KEY_FILE" ]; then
+    err "Age key not readable at $AGE_KEY_FILE"
+    err "The deploying user must be able to read the age key."
+    return 1
+  fi
+
+  local tmp
+  tmp=$(mktemp -p /etc/kenchi .env.production.XXXXXX)
+  # shellcheck disable=SC2064 -- single-file cleanup target, fine to expand now
+  trap "rm -f '$tmp'" RETURN
+
+  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" \
+    sops --decrypt --input-type dotenv --output-type dotenv "$ENV_FILE_ENC" > "$tmp"
+
+  chmod 640 "$tmp"
+  chown root:kenchi-deploy "$tmp" 2>/dev/null || chgrp kenchi-deploy "$tmp"
+  mv "$tmp" "$ENV_FILE"
+  trap - RETURN
+
+  log "Secrets decrypted to $ENV_FILE"
+}
+
 # ==================== 1. Pre-flight Checks ====================
 
 log "=== Kenchi Deploy: Pre-flight ==="
 
-if [ ! -f "$ENV_FILE" ]; then
-  err "Production secrets not found at $ENV_FILE"
-  err "Create it from deploy/.env.production.template"
+if ! command -v sops >/dev/null; then
+  err "sops is not installed. See docs/SECURITY_IMPLEMENTATION.md §B."
   exit 1
 fi
 
@@ -71,6 +109,12 @@ git reset --hard "$DEPLOY_SHA"
 
 export DEPLOY_HASH="$DEPLOY_SHA"
 
+# ==================== 3a. Decrypt Secrets ====================
+# Runs after the pull so we use the encrypted file from the deployed SHA.
+
+log "=== Kenchi Deploy: Decrypt Secrets ==="
+decrypt_secrets || exit 1
+
 # ==================== 4. Build ====================
 
 log "=== Kenchi Deploy: Build ==="
@@ -98,6 +142,9 @@ else
 
   git reset --hard "$CURRENT_SHA"
   export DEPLOY_HASH="$CURRENT_SHA"
+
+  # Re-decrypt in case the previous SHA has a different encrypted secrets file.
+  decrypt_secrets || err "Rollback decryption failed — containers will use stale env"
 
   docker compose -f "$COMPOSE_FILE" build
   docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 || true

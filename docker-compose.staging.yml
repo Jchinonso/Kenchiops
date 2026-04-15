@@ -1,0 +1,267 @@
+# Staging Docker Compose for Kenchi
+#
+# Runs alongside production on the same VPS but with isolated containers,
+# volumes, and databases. Staging traffic is routed by the production
+# Caddy via the shared `kenchi_default` network (so staging does NOT run
+# its own Caddy — one HTTPS terminator is enough).
+#
+# Key differences from docker-compose.prod.yml:
+# - Compose project name: `kenchi-staging` (set via `-p kenchi-staging` on
+#   `docker compose` invocations, or COMPOSE_PROJECT_NAME in the env).
+# - Container names are NOT hardcoded — Compose generates them with the
+#   project prefix (e.g. `kenchi-staging-api-1`) to avoid collisions.
+# - Separate postgres and redis with their own named volumes.
+# - Services join the shared `kenchi_default` network so prod Caddy can
+#   reach them via `api-staging.kenchi_default`-style DNS.
+# - Staging reads from /etc/kenchi/.env.staging (separately encrypted).
+# - Reduced memory limits — staging is not sized for production load.
+#
+# Usage (on VPS):
+#   docker compose -p kenchi-staging -f docker-compose.staging.yml up -d --build --wait
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    command: >-
+      bash -c "
+        docker-entrypoint.sh postgres &
+        PG_PID=$$!;
+        until pg_isready -U kenchi -d kenchi -q; do sleep 1; done;
+        sync-password.sh;
+        wait $$PG_PID
+      "
+    environment:
+      - POSTGRES_USER=kenchi
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=kenchi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - ./database/sync-password.sh:/usr/local/bin/sync-password.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kenchi -d kenchi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=api
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=192
+      - PORT=3000
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=https://staging.kenchiops.app
+      - OAUTH_CALLBACK_BASE_URL=https://staging.kenchiops.app
+      - GITHUB_APP_URL=https://staging.kenchiops.app
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
+      - DEPLOY_ENV=staging
+    env_file:
+      - /etc/kenchi/.env.staging
+    networks:
+      - default
+      - kenchi_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  slack-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=slack-bot
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=192
+      - PORT=3001
+      - MULTI_TENANT_MODE=true
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
+      - DEPLOY_ENV=staging
+    env_file:
+      - /etc/kenchi/.env.staging
+    networks:
+      - default
+      - kenchi_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  github-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=github-app
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=192
+      - PORT=3002
+      - MULTI_TENANT_MODE=true
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - API_URL=http://api:3000
+      - SLACK_BOT_URL=http://slack-bot:3001
+      - GITHUB_APP_URL=https://staging.kenchiops.app
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
+      - DEPLOY_ENV=staging
+    env_file:
+      - /etc/kenchi/.env.staging
+    networks:
+      - default
+      - kenchi_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  incident-triage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - SERVICE=incident-triage
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=192
+      - PORT=3004
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD}@postgres:5432/kenchi
+      - REDIS_URL=redis://redis:6379
+      - DEPLOY_HASH=${DEPLOY_HASH:-unknown}
+      - DEPLOY_ENV=staging
+    env_file:
+      - /etc/kenchi/.env.staging
+    networks:
+      - default
+      - kenchi_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_PUBLIC_URL: https://staging.kenchiops.app
+        VITE_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-kenchi-devops}
+    networks:
+      - default
+      - kenchi_default
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+networks:
+  # Default network for staging-internal traffic (postgres, redis, app services).
+  default:
+  # Prod's default network, so prod Caddy can reach staging services by name.
+  # Created by `docker compose -p kenchi up`; must exist before staging starts.
+  kenchi_default:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:

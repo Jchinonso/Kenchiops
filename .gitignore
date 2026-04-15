@@ -47,3 +47,8 @@ temp/
 # Local Git configuration (documentation only)
 .gitconfig.local
 
+
+# Decrypted secrets — never commit. Only the .enc variants may be committed.
+deploy/secrets/*.env
+!deploy/secrets/*.env.enc
+/etc/kenchi/*.env

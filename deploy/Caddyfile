@@ -31,3 +31,23 @@ kenchiops.app {
 www.kenchiops.app {
 	redir https://kenchiops.app{uri} permanent
 }
+
+# Staging environment — same VPS, isolated containers.
+# Staging services run under the `kenchi-staging` Compose project; Docker
+# DNS resolves `<service>-staging` names via the shared docker network.
+# (Docker Compose auto-names services with the project prefix, but since
+# services are referenced by network alias, we explicitly alias them.)
+staging.kenchiops.app {
+	handle_path /webhooks/github {
+		rewrite * /api/github/webhook
+		reverse_proxy kenchi-staging-github-app-1:3002
+	}
+
+	handle /webhooks/gitlab {
+		reverse_proxy kenchi-staging-github-app-1:3002
+	}
+
+	reverse_proxy /github/setup* kenchi-staging-github-app-1:3002
+	reverse_proxy /slack/* kenchi-staging-slack-bot-1:3001
+	reverse_proxy kenchi-staging-frontend-1:80
+}
