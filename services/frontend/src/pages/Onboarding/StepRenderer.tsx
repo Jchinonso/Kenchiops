@@ -9,6 +9,7 @@ export const StepRenderer = ({
   currentStep,
   firstName,
   isGitHub,
+  isProviderConnected,
   onNext,
   onBack,
   onComplete,
@@ -21,6 +22,7 @@ export const StepRenderer = ({
         <ConnectProviderStep
           isGitHub={isGitHub}
           githubAppSlug={GITHUB_APP_SLUG}
+          isProviderConnected={isProviderConnected}
           onNext={onNext}
           onBack={onBack}
         />

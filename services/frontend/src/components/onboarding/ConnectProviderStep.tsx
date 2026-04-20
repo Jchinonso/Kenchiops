@@ -24,6 +24,7 @@ import { containerVariants, itemVariants, microSpring } from "@/lib/animations";
 interface ConnectProviderStepProps {
   readonly isGitHub: boolean;
   readonly githubAppSlug: string;
+  readonly isProviderConnected: boolean;
   readonly onNext: () => void;
   readonly onBack: () => void;
 }
@@ -61,6 +62,7 @@ const DataFlowPills = () => {
 export const ConnectProviderStep = ({
   isGitHub,
   githubAppSlug,
+  isProviderConnected,
   onNext,
   onBack,
 }: ConnectProviderStepProps) => (
@@ -223,12 +225,18 @@ export const ConnectProviderStep = ({
       <motion.button
         type="button"
         onClick={onNext}
-        className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors shadow-md shadow-indigo-500/20"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        disabled={!isProviderConnected}
+        className={cn(
+          "inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors shadow-md",
+          isProviderConnected
+            ? "text-white bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20"
+            : "text-zinc-400 bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed shadow-none"
+        )}
+        whileHover={isProviderConnected ? { scale: 1.02 } : undefined}
+        whileTap={isProviderConnected ? { scale: 0.98 } : undefined}
         transition={microSpring}
       >
-        Continue
+        {isProviderConnected ? "Continue" : "Install a provider to continue"}
         <ArrowRight className="w-4 h-4" />
       </motion.button>
     </motion.div>
