@@ -131,7 +131,7 @@ export const Integrations = () => {
             icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
             connected={slackConnected}
             actionLabel={slackConnected ? "Manage" : "Connect"}
-            actionHref="/slack/oauth/install"
+            actionHref="/slack/install"
             external
           />
         </CardContent>
