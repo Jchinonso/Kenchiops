@@ -155,7 +155,10 @@ const handleSharedSecretVerification = (
   verificationLogger: ReturnType<typeof createLogger>
 ): void => {
   const { provider, secretHeader, secret } = cfg;
-  const providedSecret = req.headers[secretHeader];
+  // Check header first, fall back to query parameter (for providers like
+  // Alertmanager 0.27 that cannot send custom headers on internal networks).
+  const providedSecret =
+    req.headers[secretHeader] ?? (req.query.secret as string | undefined) ?? undefined;
 
   if (!providedSecret || typeof providedSecret !== "string") {
     verificationLogger.warn("Missing webhook secret header", {
