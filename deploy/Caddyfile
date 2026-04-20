@@ -4,27 +4,30 @@
 # Routes traffic to Docker services on the internal network.
 
 kenchiops.app {
+	# Use explicit container names (not service aliases) to avoid Docker DNS
+	# round-robin with staging containers on the shared network.
+
 	# GitHub webhook delivery → github-app service
 	# GitHub App is configured to send to /webhooks/github, rewrite to /api/github/webhook
 	handle_path /webhooks/github {
 		rewrite * /api/github/webhook
-		reverse_proxy github-app:3002
+		reverse_proxy kenchi-github-app-1:3002
 	}
 
 	# GitLab webhook delivery → github-app service
 	handle /webhooks/gitlab {
-		reverse_proxy github-app:3002
+		reverse_proxy kenchi-github-app-1:3002
 	}
 
 	# GitHub App post-install setup redirect
-	reverse_proxy /github/setup* github-app:3002
+	reverse_proxy /github/setup* kenchi-github-app-1:3002
 
 	# Slack OAuth and event routes → slack-bot service
-	reverse_proxy /slack/* slack-bot:3001
+	reverse_proxy /slack/* kenchi-slack-bot-1:3001
 
 	# Everything else → frontend nginx
 	# (frontend nginx already proxies /api, /auth, /webhooks, /health to backend services)
-	reverse_proxy frontend:80
+	reverse_proxy kenchi-frontend:80
 }
 
 # Redirect www to apex domain
