@@ -31,6 +31,7 @@ export const Integrations = () => {
   const isGitHub = loginProvider === "github";
   const { data: tenant } = useTenantInfo();
   const githubConnected = tenant?.githubConnected ?? false;
+  const slackConnected = tenant?.slackConnected ?? false;
   const tenantId = tenant?.id ?? "";
   const { data: healthData } = useIntegrationHealth(tenantId);
   const { data: usageData, isLoading: isUsageLoading } = useSubscriptionUsage();
@@ -125,15 +126,14 @@ export const Integrations = () => {
           ) : (
             <GitLabCICard tenantId={tenantId} otherProviderConnected={false} />
           )}
-          <FeatureGate feature="slackIntegration">
-            <ConnectionCard
-              name="Slack"
-              icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
-              connected={false}
-              actionLabel="Connect"
-              actionHref="/dashboard/integrations"
-            />
-          </FeatureGate>
+          <ConnectionCard
+            name="Slack"
+            icon={<MessageSquare className="w-8 h-8 text-purple-600" />}
+            connected={slackConnected}
+            actionLabel={slackConnected ? "Manage" : "Connect"}
+            actionHref="/slack/install"
+            external
+          />
         </CardContent>
       </Card>
 
