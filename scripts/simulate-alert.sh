@@ -16,7 +16,8 @@
 #   bash scripts/simulate-alert.sh all  # sends one of each provider
 #
 # Environment:
-#   WEBHOOK_SECRET  — shared secret for Prometheus/Datadog (reads from VPS if not set)
+#   WEBHOOK_SECRET  — shared secret for Prometheus/Datadog
+#   GRAFANA_SECRET  — HMAC secret for Grafana webhook verification
 #   TARGET_URL      — base URL (default: https://kenchiops.app)
 #   TENANT_ID       — tenant ID (optional, uses header fallback)
 
@@ -26,6 +27,7 @@ PROVIDER="${1:-prometheus}"
 SCENARIO="${2:-high-cpu}"
 TARGET_URL="${3:-${TARGET_URL:-https://kenchiops.app}}"
 WEBHOOK_SECRET="${WEBHOOK_SECRET:-}"
+GRAFANA_SECRET="${GRAFANA_SECRET:-}"
 TENANT_ID="${TENANT_ID:-}"
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -451,6 +453,14 @@ send_webhook() {
       url="${TARGET_URL}/webhooks/grafana"
       if [ -n "$TENANT_ID" ]; then
         url="${TARGET_URL}/webhooks/grafana/${TENANT_ID}"
+      fi
+      # Grafana uses HMAC verification: sha256(timestamp + body, secret)
+      if [ -n "$GRAFANA_SECRET" ]; then
+        local timestamp
+        timestamp=$(date +%s)
+        local signature
+        signature=$(printf '%s%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$GRAFANA_SECRET" -hex 2>/dev/null | sed 's/.*= //')
+        extra_headers="-H x-grafana-alerting-signature:${signature} -H x-grafana-alerting-timestamp:${timestamp}"
       fi
       ;;
     datadog)
