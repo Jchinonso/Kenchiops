@@ -19,7 +19,12 @@ import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { StepRenderer } from "./StepRenderer";
 import type { OnboardingProps } from "./types";
 
-export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) => {
+export const Onboarding = ({
+  displayName,
+  provider,
+  isProviderConnected,
+  onSkip,
+}: OnboardingProps) => {
   const wizard = useOnboardingWizard();
   const shouldReduceMotion = useReducedMotion();
   const stepRef = useRef<HTMLDivElement>(null);
@@ -54,6 +59,7 @@ export const Onboarding = ({ displayName, provider, onSkip }: OnboardingProps) =
             currentStep={wizard.currentStep}
             firstName={firstName}
             isGitHub={isGitHub}
+            isProviderConnected={isProviderConnected}
             onNext={wizard.goNext}
             onBack={wizard.goBack}
             onComplete={onSkip}

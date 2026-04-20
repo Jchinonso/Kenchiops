@@ -208,6 +208,9 @@ const Dashboard = () => {
         <Onboarding
           displayName={displayName}
           provider={user?.organizations.find((org) => org.isSelected)?.provider ?? "github"}
+          isProviderConnected={
+            (tenant?.githubConnected ?? false) || (tenant?.gitlabConnected ?? false)
+          }
           onSkip={handleSkipOnboarding}
         />
       );
