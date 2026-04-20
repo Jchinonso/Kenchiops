@@ -994,11 +994,16 @@ import {
 
 ## Git Conventions
 
-- Branch: `feat/`, `fix/`, `chore/`, `refactor/` prefix
+- Default branch: `develop` (staging auto-deploy). Production branch: `main`.
+- Feature branches → PR → `develop` (auto-deploys to staging)
+- Promote to production: PR from `develop` → `main` (requires approval)
+- Hotfixes: branch from `main`, PR to `main`, cherry-pick back to `develop`
+- Branch prefix: `feat/`, `fix/`, `chore/`, `refactor/`
 - Commits: conventional commits (`feat: add analysis endpoint`)
 - One logical change per commit
 - PR must pass CI (lint, type-check, tests) before review
 - Shared package changes require explicit callout in PR description
+- Never push directly to `main` or `develop`
 
 ---
 

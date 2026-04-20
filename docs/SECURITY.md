@@ -53,9 +53,14 @@ and by the `production` environment, which requires manual approval.
 **Audit:** `grep -n "self-hosted" .github/workflows/*.yml` should only show
 the `deploy` job (and the staging deploy, see 3.1).
 
-### 1.2 Branch protection on `main`
+### 1.2 Branch protection on `main` and `develop`
 
-Settings → Branches → Branch protection rule for `main`:
+`develop` is the default branch (staging auto-deploy). `main` is the
+production branch (manual approval required). Both need protection.
+
+Settings → Branches → Branch protection rules:
+
+**Rule for `main` (production):**
 
 - Require a pull request before merging
 - Require at least 1 approval
@@ -65,6 +70,13 @@ Settings → Branches → Branch protection rule for `main`:
 - Include administrators (yes — no exceptions)
 - Restrict who can push to matching branches (only admins via PR)
 - Disallow force pushes and deletions
+
+**Rule for `develop` (staging):**
+
+- Require a pull request before merging
+- Require status checks to pass (all CI jobs)
+- Disallow force pushes and deletions
+- Approval optional (staging is lower-trust; fast iteration)
 
 ### 1.3 Dedicated deploy key for `github-runner`
 
