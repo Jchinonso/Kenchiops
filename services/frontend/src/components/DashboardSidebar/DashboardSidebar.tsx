@@ -95,11 +95,6 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     children: [
       { icon: <Flame className="w-4 h-4" />, label: "Active", href: "/dashboard/incidents/active" },
       {
-        icon: <Search className="w-4 h-4" />,
-        label: "Investigations",
-        href: "/dashboard/incidents/investigations",
-      },
-      {
         icon: <Clock className="w-4 h-4" />,
         label: "Timeline",
         href: "/dashboard/incidents/timeline",
@@ -259,20 +254,8 @@ const usePrefetchRoute = (): ((href: string) => void) => {
           break;
         }
 
-        case "/dashboard/incidents/investigations": {
-          if (!tenantId) {
-            break;
-          }
-          void queryClient.prefetchQuery({
-            queryKey: queryKeys.investigations.list({
-              limit: 20,
-              offset: 0,
-            }),
-            queryFn: () => fetchQuery("/api/v1/investigations?limit=20&offset=0"),
-            staleTime: PREFETCH_STALE_TIME,
-          });
-          break;
-        }
+        // Investigations page hidden from nav (chat copilot covers this use case).
+        // Route still works if accessed directly.
 
         case "/dashboard/knowledge-base": {
           void queryClient.prefetchQuery({

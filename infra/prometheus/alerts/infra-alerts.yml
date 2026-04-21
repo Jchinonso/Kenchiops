@@ -1,0 +1,56 @@
+groups:
+  - name: infrastructure
+    rules:
+      # Container restarts
+      - alert: ContainerRestarting
+        expr: increase(process_start_time_seconds[15m]) > 1
+        for: 0m
+        labels:
+          severity: warning
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "{{ $labels.job }} has restarted"
+          description: "Service {{ $labels.job }} has restarted in the last 15 minutes."
+
+      # High memory usage (>300MB per service)
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "{{ $labels.job }} memory above 300MB"
+          description: "{{ $labels.job }} is using {{ $value | humanize }}MB of memory."
+
+      # Service down (target not responding)
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus target {{ $labels.instance }} for job {{ $labels.job }} has been down for more than 1 minute."
+
+      # High request rate (potential traffic spike)
+      - alert: HighRequestRate
+        expr: sum by (job) (rate(kenchi_api_requests_total[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "{{ $labels.job }} receiving >50 req/s"
+          description: "Request rate is {{ $value | humanize }} requests/second. Possible traffic spike."
+
+      # Node disk space low (if node_exporter is present)
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space below 15%"
+          description: "Root filesystem has {{ $value | humanizePercentage }} free space remaining."

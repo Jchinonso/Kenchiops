@@ -91,9 +91,6 @@ services:
       - DEPLOY_ENV=staging
     env_file:
       - /etc/kenchi/.env.staging
-    networks:
-      - default
-      - kenchi_default
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
@@ -133,9 +130,6 @@ services:
       - DEPLOY_ENV=staging
     env_file:
       - /etc/kenchi/.env.staging
-    networks:
-      - default
-      - kenchi_default
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
@@ -173,9 +167,6 @@ services:
       - DEPLOY_ENV=staging
     env_file:
       - /etc/kenchi/.env.staging
-    networks:
-      - default
-      - kenchi_default
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
@@ -209,9 +200,6 @@ services:
       - DEPLOY_ENV=staging
     env_file:
       - /etc/kenchi/.env.staging
-    networks:
-      - default
-      - kenchi_default
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
@@ -257,8 +245,11 @@ services:
 networks:
   # Default network for staging-internal traffic (postgres, redis, app services).
   default:
-  # Prod's default network, so prod Caddy can reach staging services by name.
-  # Created by `docker compose -p kenchi up`; must exist before staging starts.
+  # Prod's default network. ONLY the frontend service joins this so prod Caddy
+  # can reach it. Backend services (api, slack-bot, github-app, incident-triage)
+  # must NOT join kenchi_default — their service aliases (api, slack-bot, etc.)
+  # would collide with production's, causing Docker DNS round-robin and
+  # cross-environment request routing.
   kenchi_default:
     external: true
 
