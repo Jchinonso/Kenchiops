@@ -232,12 +232,14 @@ describe("Channel Handler", () => {
         findGitHubAppConnection,
         fetchInstallationRepositories,
         createMapping,
+        getMappedRepositories,
       } =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         jest.requireMock("@kenchi/shared") as any;
 
       findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
       findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
+      getMappedRepositories.mockResolvedValue(new Set());
       fetchInstallationRepositories.mockResolvedValue([
         { fullName: "owner/repo1", name: "repo1" },
         { fullName: "owner/repo2", name: "repo2" },
