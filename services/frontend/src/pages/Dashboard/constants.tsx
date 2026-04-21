@@ -3,8 +3,6 @@
  */
 
 import {
-  Clock,
-  FileText,
   FileCode,
   RefreshCw,
   DollarSign,
@@ -18,19 +16,6 @@ import {
 import type { ComingSoonConfig } from "./types";
 
 export const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
-  // ---- Incidents ----
-  "/dashboard/incidents/timeline": {
-    title: "Incident Timeline",
-    description:
-      "Chronological incident correlation across services. See how failures cascade and identify blast radius automatically.",
-    icon: <Clock className="w-8 h-8" />,
-  },
-  "/dashboard/incidents/postmortems": {
-    title: "Automated Postmortems",
-    description:
-      "AI-generated postmortem drafts from incident data — root cause, timeline, and action items ready for review.",
-    icon: <FileText className="w-8 h-8" />,
-  },
   // ---- Infrastructure ----
   "/dashboard/infra/iac": {
     title: "IaC Reviews",
@@ -91,5 +76,6 @@ export const COMING_SOON_PAGES: Readonly<Record<string, ComingSoonConfig>> = {
 };
 
 export const INVESTIGATIONS_PREFIX = "/dashboard/incidents/investigations/";
+export const POSTMORTEMS_PREFIX = "/dashboard/incidents/postmortems/";
 export const PIPELINES_PREFIX = "/dashboard/cicd/pipelines/";
 export const ANALYSES_PREFIX = "/dashboard/cicd/analyses/";

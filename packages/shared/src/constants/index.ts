@@ -345,6 +345,9 @@ export {
   INVESTIGATION_QUERIES,
 } from "./investigations.js";
 
+// Postmortem constants
+export { POSTMORTEM_DEFAULTS, POSTMORTEM_QUERIES } from "./postmortem.js";
+
 // Dashboard constants
 export { SSE_CONFIG, DASHBOARD_EVENT_TYPES } from "./dashboard.js";
 
