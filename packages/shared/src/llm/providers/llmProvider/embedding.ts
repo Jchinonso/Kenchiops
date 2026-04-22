@@ -44,9 +44,15 @@ const logger = createLogger("embedding-client");
  */
 const createClientConfig = (tier: EmbeddingTierName = "STANDARD"): EmbeddingClientConfig => {
   const tierConfig = EMBEDDING_TIERS[tier];
+
+  // Allow env-level override for non-OpenAI providers (e.g., Google AI Studio
+  // uses text-embedding-004 instead of text-embedding-3-small).
+  const model = config.EMBEDDING_MODEL || tierConfig.model;
+  const dimension = config.EMBEDDING_DIMENSION || tierConfig.dimension;
+
   return {
-    model: tierConfig.model,
-    dimension: tierConfig.dimension,
+    model,
+    dimension,
     timeout: EMBEDDING_CONFIG.TIMEOUT_MS,
     maxBatchSize: EMBEDDING_CONFIG.MAX_BATCH_SIZE,
     tier,
