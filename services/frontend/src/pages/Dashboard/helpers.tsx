@@ -10,6 +10,9 @@ import { ActiveIncidents } from "@/pages/ActiveIncidents";
 import { Investigations } from "@/pages/Investigations";
 import { NewInvestigation } from "@/pages/NewInvestigation";
 import { InvestigationDetail } from "@/pages/InvestigationDetail";
+import { IncidentTimeline } from "@/pages/IncidentTimeline";
+import { Postmortems } from "@/pages/Postmortems";
+import { PostmortemEditor } from "@/pages/PostmortemEditor";
 import { CICDAnalyses } from "@/pages/CICDAnalyses";
 import { CICDPipelines } from "@/pages/CICDPipelines";
 import { WebhookActivity } from "@/pages/WebhookActivity";
@@ -20,6 +23,7 @@ import type { ComingSoonConfig, RouteResolver } from "./types";
 import {
   COMING_SOON_PAGES,
   INVESTIGATIONS_PREFIX,
+  POSTMORTEMS_PREFIX,
   PIPELINES_PREFIX,
   ANALYSES_PREFIX,
 } from "./constants";
@@ -48,6 +52,15 @@ const INCIDENT_ROUTES: ReadonlyArray<readonly [string, RouteResolver]> = [
     },
   ],
   ["/dashboard/incidents/investigations", () => <Investigations />],
+  ["/dashboard/incidents/timeline", () => <IncidentTimeline />],
+  [
+    POSTMORTEMS_PREFIX,
+    (pathname) => {
+      const postmortemId = decodeURIComponent(pathname.slice(POSTMORTEMS_PREFIX.length));
+      return <PostmortemEditor postmortemId={postmortemId} />;
+    },
+  ],
+  ["/dashboard/incidents/postmortems", () => <Postmortems />],
   ["/dashboard/incidents/active", () => <ActiveIncidents />],
 ];
 

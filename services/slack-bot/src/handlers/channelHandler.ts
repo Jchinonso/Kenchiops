@@ -2,8 +2,8 @@
  * Channel Event Handler
  *
  * Handles Slack channel-related events, specifically when
- * the bot joins or leaves channels. Prompts users to select
- * a repository for CI notifications when joining a channel.
+ * the bot joins or leaves channels. Auto-maps all available
+ * repositories when the bot joins a channel.
  */
 
 import {
@@ -11,17 +11,15 @@ import {
   config,
   findTenantBySlackWorkspace,
   findGitHubAppConnection,
-  findMappingsForChannel,
-  deleteMappingsForChannel,
   getMappedRepositories,
   fetchInstallationRepositories,
+  createMapping,
   getErrorMessage,
+  AuthorizationError,
   type Tenant,
 } from "@kenchi/shared";
 import { type SlackClient } from "../services/channelService.js";
-import { toSlackSDKView, type SlackBlock } from "../types/slackTypes.js";
-import type { View } from "@slack/types";
-import { buildRepoSelectModal, buildNoReposModal, type RepositoryOption } from "./modalBuilders.js";
+import type { RepositoryOption } from "./modalBuilders.js";
 
 // Re-export modal constants and builders for backward compatibility
 export {
@@ -172,112 +170,134 @@ const getChannelName = async (client: SlackClient, channelId: string): Promise<s
   }
 };
 
+// ==================== Auto-Mapping Result ====================
+
+interface AutoMapResult {
+  readonly mapped: readonly string[];
+  readonly failed: readonly string[];
+  readonly planLimitHit: boolean;
+}
+
 /**
- * Build welcome message blocks with repository selection button
+ * Build the confirmation message after auto-mapping repositories.
  */
-const buildWelcomeBlocks = (
+const buildAutoMapConfirmation = (result: AutoMapResult): string => {
+  if (result.mapped.length === 0 && !result.planLimitHit) {
+    return (
+      `*Kenchi DevOps is ready!*\n\n` +
+      `No new repositories to connect \u2014 all your repositories are already mapped to channels.\n\n` +
+      `Use \`/kenchi configure\` in another channel to set up more repositories.`
+    );
+  }
+
+  const repoList = result.mapped.map((repo) => `\u2022 \`${repo}\``).join("\n");
+  const planNote = result.planLimitHit
+    ? `\n\n_Some repositories were skipped due to your plan limit. Upgrade to connect more._`
+    : "";
+  const failNote =
+    result.failed.length > 0
+      ? `\n\n_${String(result.failed.length)} repository mapping(s) failed and were skipped._`
+      : "";
+
+  return (
+    `*Kenchi DevOps is ready!*\n\n` +
+    `I've connected ${String(result.mapped.length)} repositor${result.mapped.length === 1 ? "y" : "ies"} to this channel for CI failure notifications:\n${
+      repoList
+    }\n\nWhen a CI check fails, I'll analyze the logs and post root cause analysis here.\n\n` +
+    `Use \`/kenchi unconfigure\` to remove a repository.${planNote}${failNote}`
+  );
+};
+
+/**
+ * Auto-map all available repositories to the channel.
+ * Stops early if the plan limit is hit. Continues past individual failures.
+ */
+const autoMapRepositories = async (
+  repositories: readonly RepositoryOption[],
+  tenantId: string,
   channelId: string,
-  channelName: string,
-  messageTs: string
-): SlackBlock[] => [
-  {
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `*Welcome!* I'm ready to monitor CI failures for this channel.`,
-    },
-  },
-  {
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: "Select which repository should send notifications to this channel:",
-    },
-    accessory: {
-      type: "button",
-      text: {
-        type: "plain_text",
-        text: "Select Repository",
-        emoji: true,
-      },
-      style: "primary",
-      action_id: "select_repository_button",
-      value: JSON.stringify({ channelId, channelName, messageTs }),
-    },
-  },
-];
+  channelName: string
+): Promise<AutoMapResult> => {
+  const mapped: string[] = []; // let: accumulated per-repo in sequential loop with early-exit
+  const failed: string[] = []; // let: accumulated per-repo in sequential loop with early-exit
 
-// ==================== Welcome Flow ====================
+  // Sequential to respect plan limits — each createMapping checks the limit
+  for (const repo of repositories) {
+    try {
+      await createMapping({
+        tenantId,
+        repository: repo.fullName,
+        slackChannelId: channelId,
+        slackChannelName: channelName,
+        createdBy: "auto",
+      });
+      mapped.push(repo.fullName);
+    } catch (error) {
+      // Plan limit hit — stop mapping further repos
+      if (error instanceof AuthorizationError) {
+        logger.info("Plan limit reached during auto-mapping", {
+          tenantId,
+          channelId,
+          mappedCount: mapped.length,
+          remainingCount: repositories.length - mapped.length - failed.length,
+        });
+        return { mapped, failed, planLimitHit: true };
+      }
+
+      logger.error("Failed to auto-map repository", {
+        tenantId,
+        channelId,
+        repository: repo.fullName,
+        error: getErrorMessage(error),
+      });
+      failed.push(repo.fullName);
+    }
+  }
+
+  return { mapped, failed, planLimitHit: false };
+};
+
+// ==================== Auto-Map Flow ====================
 
 /**
- * Show the welcome message with repository selection for a connected tenant.
+ * Auto-map all available repositories and post confirmation for a connected tenant.
  */
-const showWelcomeWithRepoSelection = async (
+const autoMapAndConfirm = async (
   client: SlackClient,
   channelId: string,
   tenant: Tenant,
-  installationId: number,
-  triggerId?: string
+  installationId: number
 ): Promise<void> => {
-  // Clean up any existing mappings when bot rejoins
-  const existingMappings = await findMappingsForChannel(tenant.id, channelId);
-  const hasExistingMappings = existingMappings.length > 0;
-  if (hasExistingMappings) {
-    await deleteMappingsForChannel(tenant.id, channelId);
-    logger.info("Cleaned up existing mappings on bot rejoin", {
-      channelId,
-      deletedCount: existingMappings.length,
-    });
-  }
-
   const [repositories, channelName] = await Promise.all([
     getAvailableRepositories(installationId, tenant.id),
     getChannelName(client, channelId),
   ]);
 
-  // Post welcome message with button
-  const welcomeMessage = await client.chat.postMessage({
-    channel: channelId,
-    text: "Welcome! Click the button to select a repository for this channel.",
-    blocks: buildWelcomeBlocks(channelId, channelName, ""),
-  });
+  const result =
+    repositories.length > 0
+      ? await autoMapRepositories(repositories, tenant.id, channelId, channelName)
+      : { mapped: [] as readonly string[], failed: [] as readonly string[], planLimitHit: false };
 
-  // Update the button value with the message timestamp for later updates
-  const messageTs = welcomeMessage.ts;
-  if (messageTs) {
-    await client.chat.update({
-      channel: channelId,
-      ts: messageTs,
-      text: "Welcome! Click the button to select a repository for this channel.",
-      blocks: buildWelcomeBlocks(channelId, channelName, messageTs),
-    });
+  // Invalidate cache after mapping changes
+  if (result.mapped.length > 0) {
+    clearRepoCache(tenant.id);
   }
 
-  logger.info("Posted welcome message with repository selection button", {
+  const confirmationMessage = buildAutoMapConfirmation(result);
+  await client.chat.postMessage({
+    channel: channelId,
+    text: confirmationMessage,
+    mrkdwn: true,
+  });
+
+  logger.info("Auto-mapped repositories on bot join", {
     channelId,
     channelName,
-    repositoryCount: repositories.length,
-  });
-
-  // Handle trigger_id case for direct modal opening
-  if (!triggerId) {
-    return;
-  }
-
-  // Open modal for repository selection
-  const noRepos = repositories.length < 1;
-  const modalView = noRepos
-    ? buildNoReposModal(channelName)
-    : buildRepoSelectModal(channelId, channelName, repositories);
-
-  await client.views.open({
-    trigger_id: triggerId,
-    view: toSlackSDKView(modalView) as View,
-  });
-
-  logger.info("Opened repository selection modal", {
-    channelId,
-    repositoryCount: repositories.length,
+    tenantId: tenant.id,
+    availableCount: repositories.length,
+    mappedCount: result.mapped.length,
+    failedCount: result.failed.length,
+    planLimitHit: result.planLimitHit,
   });
 };
 
@@ -288,16 +308,13 @@ const showWelcomeWithRepoSelection = async (
  *
  * Flow:
  * 1. Check if GitHub is connected (tenant exists with installation)
- * 2. If not connected, try auto-reconciliation with orphaned GitHub tenant
- * 3. If still not connected, prompt to install GitHub App
- * 4. If connected, clean up any stale mappings and post welcome message
- * 5. User can click button to open repository selection modal
+ * 2. If not connected, prompt to install GitHub App
+ * 3. If connected, auto-map all available repositories and post confirmation
  */
 export const handleBotJoinedChannel = async (
   client: SlackClient,
   channelId: string,
-  workspaceId: string,
-  triggerId?: string
+  workspaceId: string
 ): Promise<void> => {
   try {
     logger.info("Bot joined channel", { channelId, workspaceId });
@@ -322,7 +339,7 @@ export const handleBotJoinedChannel = async (
       return;
     }
 
-    await showWelcomeWithRepoSelection(client, channelId, tenant, installationId, triggerId);
+    await autoMapAndConfirm(client, channelId, tenant, installationId);
   } catch (error) {
     const errorDetails = error as { data?: { needed?: string; provided?: string } };
     logger.error("Failed to handle member_joined_channel event", {

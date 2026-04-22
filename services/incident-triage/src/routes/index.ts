@@ -12,6 +12,8 @@ import { createWebhookRoutes } from "./webhookRoutes.js";
 import { createInvestigationRoutes } from "./investigationRoutes.js";
 import { incidentRoutes } from "./incidentRoutes.js";
 import { triageRoutes } from "./triageRoutes.js";
+import { timelineRoutes } from "./timelineRoutes.js";
+import { postmortemRoutes } from "./postmortemRoutes.js";
 
 /**
  * Register all routes on the Express app.
@@ -43,4 +45,10 @@ export const registerRoutes = (app: Express, container: TriageContainer): void =
 
   // Triage result and metrics routes
   app.use(triageRoutes);
+
+  // Timeline routes (unified chronological feed)
+  app.use(timelineRoutes);
+
+  // Postmortem routes (AI-generated postmortem management)
+  app.use(postmortemRoutes);
 };

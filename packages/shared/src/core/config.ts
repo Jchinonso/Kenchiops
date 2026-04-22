@@ -119,6 +119,12 @@ export const config: Config = {
   LLM_MODEL: process.env.LLM_MODEL,
   EXTRACTION_MODEL: process.env.EXTRACTION_MODEL,
 
+  // Embedding model override. When set, ALL embedding tiers use this model
+  // instead of the hardcoded OpenAI models. Required for non-OpenAI providers
+  // like Google AI Studio (set to "text-embedding-004").
+  EMBEDDING_MODEL: optionalString("EMBEDDING_MODEL", ""),
+  EMBEDDING_DIMENSION: optionalInt("EMBEDDING_DIMENSION", 0),
+
   // OpenAI (legacy, used as fallbacks)
   OPENAI_API_KEY: getEffectiveApiKey(),
   OPENAI_MODEL: process.env.OPENAI_MODEL,

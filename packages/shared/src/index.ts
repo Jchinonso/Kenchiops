@@ -392,6 +392,23 @@ export {
   type PaginatedInvestigations,
 } from "./database/index.js";
 
+// Postmortem module
+export {
+  createPostmortem,
+  getPostmortemById,
+  listPostmortems,
+  updatePostmortem,
+  publishPostmortem,
+  type PostmortemRecord,
+  type PostmortemStatus,
+  type PostmortemContent,
+  type PostmortemActionItem,
+  type CreatePostmortemInput,
+  type UpdatePostmortemInput,
+  type ListPostmortemFilters,
+  type PaginatedPostmortems,
+} from "./database/index.js";
+
 // User module (Authentication)
 export {
   // Types

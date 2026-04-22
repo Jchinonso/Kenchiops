@@ -11,8 +11,7 @@ CREATE TABLE IF NOT EXISTS repository_channel_mappings (
     created_by VARCHAR(255),  -- Slack user ID who created the mapping
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(tenant_id, repository),  -- One channel per repo per tenant
-    UNIQUE(tenant_id, slack_channel_id)  -- One repo per channel per tenant
+    UNIQUE(tenant_id, repository)  -- One channel per repo per tenant
 );
 
 -- Indexes for efficient lookups
