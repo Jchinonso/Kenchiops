@@ -46,6 +46,19 @@ interface InvestigationsFilters {
   readonly status?: string;
 }
 
+interface TimelineFilters {
+  readonly tenantId: string;
+  readonly limit: number;
+  readonly offset: number;
+  readonly timeRange?: string;
+  readonly source?: string;
+}
+
+interface PostmortemsFilters {
+  readonly limit: number;
+  readonly offset: number;
+}
+
 interface WebhookActivityFilters {
   readonly limit: number;
   readonly offset: number;
@@ -137,6 +150,15 @@ export const queryKeys = {
       availableProjects: () => ["integrations", "gitlab", "availableProjects"] as const,
       connection: () => ["integrations", "gitlab", "connection"] as const,
     },
+  },
+  timeline: {
+    all: ["timeline"] as const,
+    list: (filters: TimelineFilters) => ["timeline", "list", filters] as const,
+  },
+  postmortems: {
+    all: ["postmortems"] as const,
+    list: (filters: PostmortemsFilters) => ["postmortems", "list", filters] as const,
+    detail: (id: string) => ["postmortems", "detail", id] as const,
   },
   chat: {
     all: ["chat"] as const,

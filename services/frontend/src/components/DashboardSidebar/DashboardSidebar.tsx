@@ -98,13 +98,11 @@ const NAV_ENTRIES: readonly NavEntry[] = [
         icon: <Clock className="w-4 h-4" />,
         label: "Timeline",
         href: "/dashboard/incidents/timeline",
-        comingSoon: true,
       },
       {
         icon: <FileText className="w-4 h-4" />,
         label: "Postmortems",
         href: "/dashboard/incidents/postmortems",
-        comingSoon: true,
       },
     ],
   },

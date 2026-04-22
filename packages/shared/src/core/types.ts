@@ -891,6 +891,12 @@ export interface Config {
   /** Model for chunk extraction (defaults to Claude 3.5 Haiku on OpenRouter) */
   readonly EXTRACTION_MODEL?: string;
 
+  /** Embedding model override — all tiers use this instead of the hardcoded
+   *  OpenAI models (e.g., text-embedding-004 for Google AI Studio) */
+  readonly EMBEDDING_MODEL?: string;
+  /** Embedding dimension override — paired with EMBEDDING_MODEL */
+  readonly EMBEDDING_DIMENSION?: number;
+
   // OpenAI Configuration (legacy, used as fallbacks)
   readonly OPENAI_API_KEY: string;
   readonly OPENAI_MODEL?: string;

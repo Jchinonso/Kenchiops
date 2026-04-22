@@ -24,10 +24,15 @@ jest.mock("@kenchi/shared", () => ({
   },
   findTenantBySlackWorkspace: jest.fn(),
   findGitHubAppConnection: jest.fn(),
-  findMappingsForChannel: jest.fn(() => Promise.resolve([])),
-  deleteMappingsForChannel: jest.fn(() => Promise.resolve()),
   getMappedRepositories: jest.fn(() => Promise.resolve(new Set())),
   fetchInstallationRepositories: jest.fn(() => Promise.resolve([])),
+  createMapping: jest.fn(() => Promise.resolve({ id: "rcm_123" })),
+  AuthorizationError: class AuthorizationError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "AuthorizationError";
+    }
+  },
   getErrorMessage: jest.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),
@@ -220,101 +225,68 @@ describe("Channel Handler", () => {
       );
     });
 
-    it("should clean up existing mappings when bot rejoins", async () => {
+    it("should auto-map all available repos when bot joins", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const {
         findTenantBySlackWorkspace,
         findGitHubAppConnection,
-        findMappingsForChannel,
-        deleteMappingsForChannel,
+        fetchInstallationRepositories,
+        createMapping,
+        getMappedRepositories,
       } =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         jest.requireMock("@kenchi/shared") as any;
 
-      findTenantBySlackWorkspace.mockResolvedValue({
-        id: "tenant-123",
-      });
-      findGitHubAppConnection.mockResolvedValue({
-        id: "prc_gh123",
-        externalOrgId: "12345",
-      });
-
-      findMappingsForChannel.mockResolvedValue([{ repository: "owner/repo" }]);
+      findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
+      findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
+      getMappedRepositories.mockResolvedValue(new Set());
+      fetchInstallationRepositories.mockResolvedValue([
+        { fullName: "owner/repo1", name: "repo1" },
+        { fullName: "owner/repo2", name: "repo2" },
+      ]);
 
       await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
-      expect(deleteMappingsForChannel).toHaveBeenCalledWith("tenant-123", "C123456");
+      expect(createMapping).toHaveBeenCalledTimes(2);
+      expect(createMapping).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "tenant-123",
+          repository: "owner/repo1",
+          slackChannelId: "C123456",
+          createdBy: "auto",
+        })
+      );
+      expect(createMapping).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "tenant-123",
+          repository: "owner/repo2",
+          slackChannelId: "C123456",
+          createdBy: "auto",
+        })
+      );
     });
 
-    it("should post welcome message with button", async () => {
+    it("should post confirmation listing mapped repos", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { findTenantBySlackWorkspace, findGitHubAppConnection, fetchInstallationRepositories } =
-        jest.requireMock(
-          "@kenchi/shared"
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ) as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
 
-      findTenantBySlackWorkspace.mockResolvedValue({
-        id: "tenant-123",
-      });
+      findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
       findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
-
       fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
 
       await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
       expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          blocks: expect.arrayContaining([
-            expect.objectContaining({
-              type: "section",
-            }),
-          ]),
+          channel: "C123456",
+          text: expect.stringContaining("owner/repo1"),
         })
       );
     });
 
-    it("should update message with correct timestamp", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findTenantBySlackWorkspace, findGitHubAppConnection } = jest.requireMock(
-        "@kenchi/shared"
-      ) as any;
-
-      findTenantBySlackWorkspace.mockResolvedValue({
-        id: "tenant-123",
-      });
-      findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
-
-      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
-
-      expect(mockClient.chat.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ts: "1234567890.123456",
-        })
-      );
-    });
-
-    it("should open modal when trigger_id is provided", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { findTenantBySlackWorkspace, findGitHubAppConnection, fetchInstallationRepositories } =
-        jest.requireMock(
-          "@kenchi/shared"
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ) as any;
-
-      findTenantBySlackWorkspace.mockResolvedValue({
-        id: "tenant-123",
-      });
-      findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
-
-      fetchInstallationRepositories.mockResolvedValue([{ fullName: "owner/repo1", name: "repo1" }]);
-
-      await handleBotJoinedChannel(mockClient, "C123456", "T123456", "trigger-123");
-
-      expect(mockClient.views.open).toHaveBeenCalled();
-    });
-
-    it("should open no-repos modal when no repositories available", async () => {
+    it("should post all-mapped message when no repos available", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const {
         findTenantBySlackWorkspace,
@@ -324,20 +296,84 @@ describe("Channel Handler", () => {
       } =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         jest.requireMock("@kenchi/shared") as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { buildNoReposModal } = jest.requireMock("../handlers/modalBuilders.js") as any;
 
-      findTenantBySlackWorkspace.mockResolvedValue({
-        id: "tenant-123",
-      });
+      findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
       findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
-
       fetchInstallationRepositories.mockResolvedValue([]);
       getMappedRepositories.mockResolvedValue(new Set());
 
-      await handleBotJoinedChannel(mockClient, "C123456", "T123456", "trigger-123");
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
 
-      expect(buildNoReposModal).toHaveBeenCalled();
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("No new repositories to connect"),
+        })
+      );
+    });
+
+    it("should stop mapping on plan limit and note it in confirmation", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const {
+        findTenantBySlackWorkspace,
+        findGitHubAppConnection,
+        fetchInstallationRepositories,
+        createMapping,
+        AuthorizationError,
+      } =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
+
+      findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
+      findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
+      fetchInstallationRepositories.mockResolvedValue([
+        { fullName: "owner/repo1", name: "repo1" },
+        { fullName: "owner/repo2", name: "repo2" },
+      ]);
+      createMapping
+        .mockResolvedValueOnce({ id: "rcm_1" })
+        .mockRejectedValueOnce(new AuthorizationError("Plan limit exceeded"));
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      expect(createMapping).toHaveBeenCalledTimes(2);
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("plan limit"),
+        })
+      );
+    });
+
+    it("should continue past individual repo failures", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const {
+        findTenantBySlackWorkspace,
+        findGitHubAppConnection,
+        fetchInstallationRepositories,
+        createMapping,
+      } =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        jest.requireMock("@kenchi/shared") as any;
+
+      findTenantBySlackWorkspace.mockResolvedValue({ id: "tenant-123" });
+      findGitHubAppConnection.mockResolvedValue({ id: "prc_gh123", externalOrgId: "12345" });
+      fetchInstallationRepositories.mockResolvedValue([
+        { fullName: "owner/repo1", name: "repo1" },
+        { fullName: "owner/repo2", name: "repo2" },
+        { fullName: "owner/repo3", name: "repo3" },
+      ]);
+      createMapping
+        .mockResolvedValueOnce({ id: "rcm_1" })
+        .mockRejectedValueOnce(new Error("DB error"))
+        .mockResolvedValueOnce({ id: "rcm_3" });
+
+      await handleBotJoinedChannel(mockClient, "C123456", "T123456");
+
+      expect(createMapping).toHaveBeenCalledTimes(3);
+      expect(mockClient.chat.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("2 repositor"),
+        })
+      );
     });
 
     it("should handle errors gracefully", async () => {
