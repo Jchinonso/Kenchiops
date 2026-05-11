@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY . .
 RUN npx tsc --build --force
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:26-alpine AS production
 
 WORKDIR /app
 
