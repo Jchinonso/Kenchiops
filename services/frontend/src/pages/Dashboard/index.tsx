@@ -180,9 +180,11 @@ const Dashboard = () => {
       (tenant !== null && !tenant.githubConnected && !tenant.gitlabConnected));
 
   const handleSkipOnboarding = () => {
-    localStorage.setItem(onboardingKey, "1");
     setOnboardingSkipped(true);
     setOnboardingDismissed(true);
+    if (currentPath === "/dashboard/onboarding") {
+      navigate("/dashboard", { replace: true });
+    }
   };
 
   const resolvePageContent = (): React.ReactNode => {

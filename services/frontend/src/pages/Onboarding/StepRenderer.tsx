@@ -13,6 +13,7 @@ export const StepRenderer = ({
   onNext,
   onBack,
   onComplete,
+  onRefreshConnection,
 }: StepRendererProps) => {
   switch (currentStep) {
     case 0:
@@ -25,12 +26,13 @@ export const StepRenderer = ({
           isProviderConnected={isProviderConnected}
           onNext={onNext}
           onBack={onBack}
+          onRefreshConnection={onRefreshConnection}
         />
       );
     case 2:
       return <FeaturesStep onNext={onNext} onBack={onBack} />;
     case 3:
-      return <ReadyStep firstName={firstName} onComplete={onComplete} onBack={onBack} />;
+      return <ReadyStep firstName={firstName} onComplete={onComplete} />;
     default:
       return null;
   }
