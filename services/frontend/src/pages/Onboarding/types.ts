@@ -17,4 +17,5 @@ export interface StepRendererProps {
   readonly onNext: () => void;
   readonly onBack: () => void;
   readonly onComplete: () => void;
+  readonly onRefreshConnection: () => void;
 }
