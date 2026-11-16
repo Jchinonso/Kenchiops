@@ -709,3 +709,15 @@ export {
   getTodayTokenUsage,
   incrementTokenUsage,
 } from "./chatTokenUsage/index.js";
+
+// Reliability metrics aggregation
+export {
+  getReliabilityMetricsSummary,
+  getSeverityBreakdown,
+  getMttrTrend,
+  type ReliabilityMetricsSummary,
+  type SeverityCount,
+  type MttrTrendPoint,
+  type TimeSavedEstimate,
+  type ReliabilityMetrics,
+} from "./metrics/index.js";

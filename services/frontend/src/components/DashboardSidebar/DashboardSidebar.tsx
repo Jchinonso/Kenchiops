@@ -71,6 +71,11 @@ const NAV_ENTRIES: readonly NavEntry[] = [
     href: "/dashboard",
   },
   {
+    icon: <BarChart3 className="w-5 h-5" />,
+    label: "Metrics",
+    href: "/dashboard/metrics",
+  },
+  {
     icon: <GitBranch className="w-5 h-5" />,
     label: "CI/CD",
     basePath: "/dashboard/cicd",

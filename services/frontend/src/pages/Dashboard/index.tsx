@@ -29,6 +29,7 @@ import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { DashboardFooter } from "@/components/DashboardFooter";
 import { KnowledgeBase } from "@/pages/KnowledgeBase";
+import { Metrics } from "@/pages/Metrics";
 import { formatRelativeTime } from "@/lib/formatters";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CopilotButton, CopilotDrawer } from "@/components/CopilotDrawer";
@@ -51,6 +52,7 @@ const STATIC_ROUTES: Readonly<Record<string, React.ReactNode>> = {
   "/dashboard/settings/plan": <PlanSelection />,
   "/dashboard/settings": <Settings />,
   "/dashboard/knowledge-base": <KnowledgeBase />,
+  "/dashboard/metrics": <Metrics />,
 };
 
 const Dashboard = () => {
