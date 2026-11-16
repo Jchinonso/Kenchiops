@@ -709,3 +709,15 @@ export {
   getTodayTokenUsage,
   incrementTokenUsage,
 } from "./chatTokenUsage/index.js";
+
+// Schema migration runner
+export {
+  runMigrations,
+  loadMigrationFiles,
+  MIGRATIONS_TABLE,
+  type MigrationFile,
+  type AppliedMigration,
+  type MigrationMode,
+  type RunMigrationsOptions,
+  type MigrationResult,
+} from "./migrator/index.js";

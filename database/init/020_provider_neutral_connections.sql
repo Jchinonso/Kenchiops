@@ -63,13 +63,26 @@ WHERE slack_workspace_id IS NOT NULL
 ON CONFLICT (tenant_id, provider, connection_name) DO NOTHING;
 
 -- Migrate GitLab platform data
-INSERT INTO provider_connections (tenant_id, provider, connection_name, external_org_id, config)
-SELECT
-    id,
-    'gitlab',
-    gitlab_group_path,
-    gitlab_group_path,
-    jsonb_build_object('group_path', gitlab_group_path)
-FROM tenants
-WHERE gitlab_group_path IS NOT NULL
-ON CONFLICT (tenant_id, provider, connection_name) DO NOTHING;
+-- Guard on the legacy column existing: `gitlab_group_path` was only ever present
+-- on hand-migrated/legacy tenant rows and is dropped in 021. On a fresh install
+-- the column is absent and there is no GitLab data to seed, so this is a no-op.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tenants' AND column_name = 'gitlab_group_path'
+    ) THEN
+        EXECUTE $seed$
+            INSERT INTO provider_connections (tenant_id, provider, connection_name, external_org_id, config)
+            SELECT
+                id,
+                'gitlab',
+                gitlab_group_path,
+                gitlab_group_path,
+                jsonb_build_object('group_path', gitlab_group_path)
+            FROM tenants
+            WHERE gitlab_group_path IS NOT NULL
+            ON CONFLICT (tenant_id, provider, connection_name) DO NOTHING
+        $seed$;
+    END IF;
+END $$;
