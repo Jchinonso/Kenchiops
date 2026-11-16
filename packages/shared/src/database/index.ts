@@ -721,3 +721,15 @@ export {
   type RunMigrationsOptions,
   type MigrationResult,
 } from "./migrator/index.js";
+
+// Reliability metrics aggregation
+export {
+  getReliabilityMetricsSummary,
+  getSeverityBreakdown,
+  getMttrTrend,
+  type ReliabilityMetricsSummary,
+  type SeverityCount,
+  type MttrTrendPoint,
+  type TimeSavedEstimate,
+  type ReliabilityMetrics,
+} from "./metrics/index.js";

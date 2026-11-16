@@ -164,4 +164,8 @@ export const queryKeys = {
     all: ["chat"] as const,
     conversations: () => ["chat", "conversations"] as const,
   },
+  metrics: {
+    all: ["metrics"] as const,
+    reliability: (days: number) => ["metrics", "reliability", { days }] as const,
+  },
 } as const;

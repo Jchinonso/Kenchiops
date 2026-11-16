@@ -25,6 +25,7 @@ import { apiKeyRoutes } from "./apiKeyRoutes.js";
 import { billingRoutes } from "./billingRoutes.js";
 import { feedbackRoutes } from "./feedbackRoutes.js";
 import { chatRoutes } from "./chatRoutes.js";
+import { metricsRoutes } from "./metricsRoutes.js";
 import { createDeployWebhookRoutes } from "./deployWebhookRoutes.js";
 import type { DeployContainer } from "../container/deployContainer.js";
 
@@ -94,6 +95,9 @@ export const registerRoutes = (app: Express, deployContainer?: DeployContainer):
 
   // Chat routes (Copilot Drawer — streaming completions, conversations, messages)
   app.use(chatRoutes);
+
+  // Metrics routes (reliability/MTTR dashboard — read-only aggregates)
+  app.use(metricsRoutes);
 
   // Deploy webhook routes (Vercel, Railway, Render, Netlify — Pipeline A continuous logs)
   if (deployContainer) {
