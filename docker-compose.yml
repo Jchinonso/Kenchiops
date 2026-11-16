@@ -17,8 +17,10 @@ services:
     ports:
       - "5433:5432"
     volumes:
+      # Schema is applied by the `migrate` service (single source of truth),
+      # not Postgres's one-shot docker-entrypoint-initdb.d (which only ran on a
+      # fresh volume and never re-applied later migrations).
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kenchi -d kenchi"]
       interval: 10s
@@ -39,6 +41,28 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  # One-shot schema migration runner. Applies pending database/init/*.sql files
+  # (tracked in schema_migrations) then exits 0. App services wait for it to
+  # complete successfully before starting, so they never boot against an
+  # unmigrated database.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    command: ["node", "packages/shared/dist/database/migrator/cli.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://kenchi:${POSTGRES_PASSWORD:-kenchi_dev_password}@postgres:5432/kenchi
+    env_file:
+      - .env
+    volumes:
+      - ./database/init:/app/database/init:ro
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
     build:
@@ -72,6 +96,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   slack-bot:
     build:
@@ -104,6 +130,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   github-app:
     build:
@@ -140,6 +168,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   incident-triage:
     build:
@@ -171,6 +201,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build:

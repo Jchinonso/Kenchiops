@@ -29,6 +29,7 @@
     "build:frontend": "npm --workspace services/frontend run build",
     "clean": "npm run clean --workspaces --if-present",
     "type-check": "tsc --build --force",
+    "migrate": "tsx scripts/migrate.ts",
     "validate": "tsx scripts/validate-env.ts",
     "check-build": "tsx scripts/check-build.ts",
     "check:duplication": "tsx scripts/check-duplication.ts",
